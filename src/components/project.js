@@ -292,7 +292,8 @@ const ModuleProject = {
       const p = State.currentProject();
       const charCount = (p.characters || []).length;
       const locCount  = (p.locations  || []).length;
-      const total     = charCount + locCount;
+      const objCount  = (p.objects    || []).length;
+      const total     = charCount + locCount + objCount;
 
       Toast.success(`✦ Blueprint — ${charCount} personnage(s), ${locCount} lieu(x), ${blueprint.scriptSections?.length || 0} sections`);
 
@@ -348,8 +349,28 @@ const ModuleProject = {
           setProgress(`✅ ${l.name}`);
         }
 
+        // Objets
+        const objs = State.currentProject().objects || [];
+        for (const o of objs) {
+          if (o.imageUrl) { done++; setProgress(`Objet déjà généré : ${o.name}`); continue; }
+          setProgress(`Génération objet : ${o.name}...`);
+          try {
+            const desc = o.description || o.name;
+            const imgPrompt = `${desc}, product photography, photorealistic, studio lighting, clean background, sharp focus, professional`;
+            const imageUrl = await NanoBananaAPI.generateAndWait(
+              { prompt: imgPrompt, imageInputs: [], aspectRatio: '1:1', resolution: '1K' },
+              (pct) => setProgress(`${o.name} — ${pct}%`)
+            );
+            const pObj = State.currentProject();
+            const obj  = (pObj.objects || []).find(x => x.id === o.id);
+            if (obj) { obj.imageUrl = imageUrl; obj.locked = true; State.save(); }
+          } catch (e) { Toast.error(`Image ${o.name}: ${e.message?.substring(0, 40)}`); }
+          done++;
+          setProgress(`✅ ${o.name}`);
+        }
+
         if (progBar) progBar.style.width = '100%';
-        if (progSt)  progSt.textContent  = `✅ ${total} visuels générés et verrouillés`;
+        if (progSt)  progSt.textContent  = `✅ ${done}/${total} visuels générés`;
         Toast.success('Pipeline prêt — va dans Shots Kling pour générer les vidéos');
         this.render();
         App.updateBadges();
@@ -552,7 +573,8 @@ Prompt original : "${prompt}"`,
 
     const chars = p.characters || [];
     const locs  = p.locations  || [];
-    const total  = chars.length + locs.length;
+    const objs  = p.objects    || [];
+    const total  = chars.length + locs.length + objs.length;
     let done = 0;
 
     const updateProgress = (label) => {
@@ -616,15 +638,40 @@ Prompt original : "${prompt}"`,
       }
     }
 
+    // Objets
+    for (let i = 0; i < objs.length; i++) {
+      const o = objs[i];
+      if (o.imageUrl) { done++; updateProgress(`Objet déjà généré : ${o.name}`); continue; }
+      updateProgress(`Génération objet : ${o.name}...`);
+      try {
+        const desc = o.description || o.name;
+        const prompt = `${desc}, product photography, photorealistic, studio lighting, clean background, sharp focus, professional`;
+        const imageUrl = await NanoBananaAPI.generateAndWait(
+          { prompt, imageInputs: [], aspectRatio: '1:1', resolution: '1K' },
+          (pct) => updateProgress(`${o.name} — ${pct}%`)
+        );
+        const pO = State.currentProject();
+        const obj = (pO.objects || []).find(x => x.id === o.id);
+        if (obj) { obj.imageUrl = imageUrl; obj.locked = true; State.save(); }
+        done++;
+        updateProgress(`✅ ${o.name} généré`);
+      } catch (e) {
+        console.error('Asset gen error (obj):', e);
+        Toast.error(`Erreur ${o.name}: ${e.message?.substring(0, 40)}`);
+        done++;
+      }
+    }
+
     if (progressEl) {
       progressEl.innerHTML = `
         <div style="font-size:11px;color:#22c55e;font-family:var(--font-mono)">✅ ${done}/${total} assets générés et verrouillés — prêt pour Kling 3</div>
       `;
     }
     if (btn) btn.disabled = false;
+    this.render();
     App.updateBadges();
     App.updateSidebarStats();
-    Toast.success(`${done} assets générés et verrouillés`);
+    Toast.success(`${done}/${total} assets générés et verrouillés`);
   },
 
   // ── Export dossier de production ─────────────────────────────────────
