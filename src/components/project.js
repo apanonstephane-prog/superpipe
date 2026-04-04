@@ -277,6 +277,7 @@ const ModuleProject = {
     }, 400);
 
     try {
+      // ── PHASE 1 : Analyse + Blueprint ──────────────────────────────
       const blueprint = await AutoBuildEngine.parse(prompt);
 
       clearInterval(stepTimer);
@@ -284,16 +285,84 @@ const ModuleProject = {
       if (progSt)  progSt.textContent  = 'Blueprint appliqué ✓';
 
       AutoBuildEngine.apply(blueprint);
+      this.render();
+      App.updateBadges();
+      App.updateSidebarStats();
 
-      Toast.success(`✦ Blueprint généré — ${blueprint.characters?.length || 0} personnage(s), ${blueprint.locations?.length || 0} lieu(x), ${blueprint.scriptSections?.length || 0} sections`);
+      const p = State.currentProject();
+      const charCount = (p.characters || []).length;
+      const locCount  = (p.locations  || []).length;
+      const total     = charCount + locCount;
+
+      Toast.success(`✦ Blueprint — ${charCount} personnage(s), ${locCount} lieu(x), ${blueprint.scriptSections?.length || 0} sections`);
+
+      // ── PHASE 2 : Génération images personnages + lieux ────────────
+      if (total > 0 && State.getConfig().replicateApiKey) {
+        if (progDiv) progDiv.style.display = 'block';
+        if (progBar) progBar.style.width = '0%';
+        if (progSt)  progSt.textContent  = `Génération des ${total} visuels de référence...`;
+
+        let done = 0;
+
+        const setProgress = (label) => {
+          const pct = Math.round((done / total) * 100);
+          if (progBar) progBar.style.width = pct + '%';
+          if (progSt)  progSt.textContent  = label;
+        };
+
+        // Personnages
+        const chars = State.currentProject().characters || [];
+        for (const c of chars) {
+          if (c.generatedBase) { done++; setProgress(`Personnage déjà généré : ${c.name}`); continue; }
+          setProgress(`Génération : ${c.name}...`);
+          try {
+            const desc = c.description || c.name;
+            const imgPrompt = `${desc}, portrait, photorealistic, professional photography, sharp focus, studio lighting`;
+            const imageUrl = await NanoBananaAPI.generateAndWait(
+              { prompt: imgPrompt, imageInputs: [], aspectRatio: '2:3', resolution: '1K' },
+              (pct) => setProgress(`${c.name} — ${pct}%`)
+            );
+            State.updateCharacter(c.id, { generatedBase: imageUrl, locked: true });
+          } catch (e) { Toast.error(`Image ${c.name}: ${e.message?.substring(0, 40)}`); }
+          done++;
+          setProgress(`✅ ${c.name}`);
+        }
+
+        // Lieux
+        const locs = State.currentProject().locations || [];
+        for (const l of locs) {
+          if (l.imageUrl) { done++; setProgress(`Lieu déjà généré : ${l.name}`); continue; }
+          setProgress(`Génération lieu : ${l.name}...`);
+          try {
+            const desc = l.promptDesc || l.description || l.name;
+            const mood = l.mood ? `, ${l.mood}` : '';
+            const imgPrompt = `${desc}${mood}, photorealistic, cinematic, professional photography, sharp focus, dramatic lighting`;
+            const proj = State.currentProject();
+            const imageUrl = await NanoBananaAPI.generateAndWait(
+              { prompt: imgPrompt, imageInputs: [], aspectRatio: proj?.aspectRatio || '16:9', resolution: '1K' },
+              (pct) => setProgress(`${l.name} — ${pct}%`)
+            );
+            State.updateLocation(l.id, { imageUrl, locked: true });
+          } catch (e) { Toast.error(`Image ${l.name}: ${e.message?.substring(0, 40)}`); }
+          done++;
+          setProgress(`✅ ${l.name}`);
+        }
+
+        if (progBar) progBar.style.width = '100%';
+        if (progSt)  progSt.textContent  = `✅ ${total} visuels générés et verrouillés`;
+        Toast.success('Pipeline prêt — va dans Shots Kling pour générer les vidéos');
+        this.render();
+        App.updateBadges();
+
+      } else if (total > 0) {
+        // Pas de clé Replicate → avertir mais ne pas bloquer
+        Toast.info(`Blueprint prêt — configure la clé Replicate pour générer les ${total} visuels automatiquement`);
+      }
 
       setTimeout(() => {
         if (btn)     btn.disabled = false;
         if (progDiv) progDiv.style.display = 'none';
-        this.render();
-        App.updateBadges();
-        App.updateSidebarStats();
-      }, 800);
+      }, 1500);
 
     } catch (e) {
       clearInterval(stepTimer);
