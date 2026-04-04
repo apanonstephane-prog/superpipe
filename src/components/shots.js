@@ -598,7 +598,7 @@ const ModuleShots = {
     const rushes   = [];
     let current    = [];
     let currentDur = 0;
-    const mode     = project._klingMode || 'std';
+    const mode     = project._klingMode || 'standard';
     const aspect   = project._klingAspect || '16:9';
     const existingCount = (project.rushes || []).filter(r => r.sectionIndex === sectionIndex).length;
 
@@ -695,7 +695,7 @@ const ModuleShots = {
         {
           shots:         next.shots,
           negativePrompt: next.shots[0]?.negativePrompt || '',
-          mode:          next.mode || 'std',
+          mode:          next.mode || 'standard',
           aspectRatio:   next.aspectRatio || '16:9',
         },
         State.currentProject(),
