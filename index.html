@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SUPER PIPE — Production Vidéo IA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="src/styles/main.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- ── SIDEBAR ── -->
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-main">SUPER PIPE</span>
+        </div>
+        <div class="logo-tag">PIPELINE VIDÉO IA</div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-module="project">
+          <span>PROJET</span>
+          <span class="nav-badge" id="badge-project"></span>
+        </button>
+        <button class="nav-item" data-module="cref">
+          <span>PERSONNAGES</span>
+          <span class="nav-badge" id="badge-cref"></span>
+        </button>
+        <button class="nav-item" data-module="lref">
+          <span>LIEUX</span>
+          <span class="nav-badge" id="badge-lref"></span>
+        </button>
+        <button class="nav-item" data-module="script">
+          <span>SCRIPT</span>
+          <span class="nav-badge" id="badge-script"></span>
+        </button>
+        <button class="nav-item" data-module="objects">
+          <span>OBJETS</span>
+          <span class="nav-badge" id="badge-objects"></span>
+        </button>
+        <button class="nav-item" data-module="shots">
+          <span>SHOTS KLING</span>
+          <span class="nav-badge" id="badge-shots"></span>
+        </button>
+        <button class="nav-item" data-module="titrage">
+          <span>TITRAGES</span>
+          <span class="nav-badge" id="badge-titrage"></span>
+        </button>
+        <button class="nav-item" data-module="montage">
+          <span>MONTAGE</span>
+          <span class="nav-badge" id="badge-montage"></span>
+        </button>
+      </nav>
+
+      <!-- Stats sidebar -->
+      <div class="sidebar-stats">
+        <div class="stat-row">
+          <span class="stat-label">PROGRESSION</span>
+          <span class="stat-val" id="sb-progression">0 / 0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">SHOTS VALIDÉS</span>
+          <span class="stat-val" id="sb-validated">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">PERSONNAGES</span>
+          <span class="stat-val" id="sb-chars">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">LIEUX</span>
+          <span class="stat-val" id="sb-locs">0</span>
+        </div>
+      </div>
+
+      <!-- Projets -->
+      <div class="sidebar-projects">
+        <div class="sidebar-section-title">PROJETS</div>
+        <div id="project-list"></div>
+        <button id="btn-new-project" class="btn-new-proj">+ NOUVEAU</button>
+      </div>
+
+      <!-- Accent -->
+      <div class="sidebar-footer">
+        <div id="accent-picker">
+          <span class="accent-label">ACCENT</span>
+          <div class="accent-swatches">
+            <button class="swatch" data-color="#C9A84C" style="background:#C9A84C"></button>
+            <button class="swatch" data-color="#FF6B35" style="background:#FF6B35"></button>
+            <button class="swatch" data-color="#00F5D4" style="background:#00F5D4"></button>
+            <button class="swatch" data-color="#E040FB" style="background:#E040FB"></button>
+            <button class="swatch" data-color="#69FF47" style="background:#69FF47"></button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── MAIN WRAPPER ── -->
+    <div id="main-wrapper">
+
+      <!-- ── TOPBAR (style ARA) ── -->
+      <header id="topbar">
+        <div id="topbar-title">
+          <span id="topbar-module-name">SUPER PIPE — Pipeline Visuel</span>
+        </div>
+
+        <div id="topbar-apis">
+          <!-- OpenRouter -->
+          <div class="api-block">
+            <div class="api-block-label">OpenRouter (Prompts IA)</div>
+            <div class="api-block-field">
+              <input
+                type="password"
+                id="hdr-claude-key"
+                placeholder="sk-or-v1-..."
+                autocomplete="off"
+                onchange="ApiBar.save()"
+                onblur="ApiBar.save()"
+              />
+              <div class="api-block-dot" id="dot-claude"></div>
+            </div>
+            <div class="api-block-field" style="margin-top:4px">
+              <select id="hdr-or-model" onchange="ApiBar.save()" style="background:var(--bg-2);border:1px solid var(--border);color:var(--text-1);padding:3px 6px;border-radius:4px;font-size:10px;font-family:var(--font-mono);width:100%">
+                <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
+                <option value="anthropic/claude-opus-4-6">Claude Opus 4.6</option>
+                <option value="openai/gpt-4.1">GPT-4.1</option>
+                <option value="openai/gpt-4o">GPT-4o</option>
+                <option value="google/gemini-2.0-flash-001">Gemini 2.0 Flash</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Replicate -->
+          <div class="api-block">
+            <div class="api-block-label">Replicate (Kling 3)</div>
+            <div class="api-block-field">
+              <input
+                type="password"
+                id="hdr-replicate-key"
+                placeholder="r8_..."
+                autocomplete="off"
+                onchange="ApiBar.save()"
+                onblur="ApiBar.save()"
+              />
+              <div class="api-block-dot" id="dot-replicate"></div>
+            </div>
+          </div>
+
+          <!-- Shotstack -->
+          <div class="api-block">
+            <div class="api-block-label">Shotstack</div>
+            <div class="api-block-field">
+              <input
+                type="password"
+                id="hdr-shotstack-key"
+                placeholder="Clé API..."
+                autocomplete="off"
+                onchange="ApiBar.save()"
+                onblur="ApiBar.save()"
+              />
+              <div class="api-block-dot" id="dot-shotstack"></div>
+            </div>
+          </div>
+
+          <button class="topbar-connect-btn" id="topbar-connect-btn" onclick="ApiBar.connect()">
+            CONNECTER
+          </button>
+        </div>
+      </header>
+
+      <!-- ── MODULES ── -->
+      <main id="main-content">
+        <div id="module-project"  class="module active"></div>
+        <div id="module-cref"     class="module"></div>
+        <div id="module-lref"     class="module"></div>
+        <div id="module-script"   class="module"></div>
+        <div id="module-objects"  class="module"></div>
+        <div id="module-shots"    class="module"></div>
+        <div id="module-titrage"  class="module"></div>
+        <div id="module-montage"  class="module"></div>
+      </main>
+    </div>
+
+  </div><!-- /#app -->
+
+  <div id="toast-container"></div>
+  <div id="modal-overlay" class="hidden">
+    <div id="modal-box"></div>
+  </div>
+
+  <script src="src/engine/nanoBananaApi.js"></script>
+  <script src="src/engine/claudeApi.js"></script>
+  <script src="src/engine/autoBuildEngine.js"></script>
+  <script src="src/store/state.js"></script>
+  <script src="src/utils/toast.js"></script>
+  <script src="src/utils/download.js"></script>
+  <script src="src/engine/promptEngine.js"></script>
+  <script src="src/engine/klingApi.js"></script>
+  <script src="src/engine/shotstackApi.js"></script>
+  <script src="src/components/objects.js"></script>
+  <script src="src/components/project.js"></script>
+  <script src="src/components/cref.js"></script>
+  <script src="src/components/lref.js"></script>
+  <script src="src/components/script.js"></script>
+  <script src="src/components/shots.js"></script>
+  <script src="src/components/titrage.js"></script>
+  <script src="src/components/montage.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>
