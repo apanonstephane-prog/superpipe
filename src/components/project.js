@@ -509,7 +509,7 @@ Prompt original : "${prompt}"`,
       try {
         const desc = c.description || c.name;
         const prompt = `${desc}, portrait, photorealistic, professional photography, sharp focus, studio lighting`;
-        const imageUrl = await NanaBananaAPI.generateAndWait(
+        const imageUrl = await NanoBananaAPI.generateAndWait(
           { prompt, imageInputs: [], aspectRatio: '2:3', resolution: '1K' },
           (pct) => updateProgress(`${c.name} — ${pct}%`)
         );
@@ -534,7 +534,7 @@ Prompt original : "${prompt}"`,
         const prompt = `${desc}${mood}, photorealistic, cinematic, professional photography, sharp focus, dramatic lighting`;
         const p2 = State.currentProject();
         const aspectRatio = p2?.aspectRatio || '16:9';
-        const imageUrl = await NanaBananaAPI.generateAndWait(
+        const imageUrl = await NanoBananaAPI.generateAndWait(
           { prompt, imageInputs: [], aspectRatio, resolution: '1K' },
           (pct) => updateProgress(`${l.name} — ${pct}%`)
         );
