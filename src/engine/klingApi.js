@@ -128,27 +128,23 @@ const KlingAPI = (() => {
     const key = getKey();
     const { referenceImages } = buildReferenceImages(project);
 
-    // Normaliser les shots (max 6, min 3s/shot, total ≤ 15s, prompt ≤ 512 chars)
-    const shots = (multishot.shots || []).slice(0, 6).map(s => ({
-      prompt:   (s.prompt || '').substring(0, 512),
-      duration: Math.max(3, Math.min(15, Math.round(s.duration || 5))),
-    }));
+    // ── DURÉE FIXE 10s ──────────────────────────────────────────────────
+    // Chaque rush = 1 seul shot de 10s. Payload simplifié, zéro multishot.
+    // L'utilisateur calibre au montage Shotstack.
+    const FIXED_DURATION = 10;
+    const firstShot = multishot.shots?.[0];
+    if (!firstShot) throw new Error('Aucun shot défini');
 
-    if (shots.length === 0) throw new Error('Aucun shot défini');
+    const prompt = (firstShot.prompt || '').substring(0, 512);
 
-    // mode : l'API Replicate attend "standard" ou "pro" (pas "std")
+    // mode : l'API Replicate attend "standard" ou "pro"
     const modeRaw = multishot.mode || 'standard';
     const mode    = modeRaw === 'std' ? 'standard' : modeRaw;
 
-    // duration totale = somme exacte des durées de shots (obligatoire pour Kling 3)
-    const totalDuration = shots.reduce((sum, s) => sum + s.duration, 0);
-
     const input = {
-      prompt:          shots[0]?.prompt || '',   // champ obligatoire — premier shot suffit
-      multi_prompt:    JSON.stringify(shots),     // string JSON, pas array
-      multi_shot_type: 'customize',
-      duration:        totalDuration,             // OBLIGATOIRE : doit égaler la somme des shots
-      negative_prompt: multishot.negativePrompt || 'blurry, low quality, watermark, text overlay, distorted, overexposed, amateur, static shot, shaky',
+      prompt,
+      duration:        FIXED_DURATION,
+      negative_prompt: multishot.negativePrompt || firstShot.negativePrompt || 'blurry, low quality, watermark, text overlay, distorted, overexposed, amateur, static shot, shaky',
       cfg_scale:       0.5,
       mode,
       aspect_ratio:    multishot.aspectRatio || '16:9',

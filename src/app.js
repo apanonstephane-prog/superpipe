@@ -232,12 +232,21 @@ const App = {
     if (!p) return;
     const rushes    = p.rushes || [];
     const validated = rushes.filter(r => r.validated).length;
+    const generated = rushes.filter(r => r.status === 'done' || r.videoUrl).length;
+    const pending   = rushes.filter(r => r.status === 'pending' || r.status === 'generating').length;
+
+    // Coût : 10s × $0.15/s = $1.50 par rush généré
+    const COST_PER_RUSH = 1.50;
+    const spent    = generated * COST_PER_RUSH;
+    const estimate = pending   * COST_PER_RUSH;
 
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     set('sb-progression', `${validated} / ${rushes.length}`);
     set('sb-validated',   validated);
     set('sb-chars',       p.characters?.length || 0);
     set('sb-locs',        p.locations?.length  || 0);
+    set('sb-cost-spent',  `$${spent.toFixed(2)}`);
+    set('sb-cost-est',    pending > 0 ? `+$${estimate.toFixed(2)} en attente` : '');
   },
 
   applyAccent(color) {

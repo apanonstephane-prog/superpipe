@@ -595,31 +595,14 @@ const ModuleShots = {
   // ─────────────────────────────────────────────────────────────────
 
   _packShotsIntoRushes(shots, sectionIndex, sectionLabel, sectionType, project) {
-    const rushes   = [];
-    let current    = [];
-    let currentDur = 0;
-    const mode     = project._klingMode || 'standard';
-    const aspect   = project._klingAspect || '16:9';
+    // 1 shot = 1 rush de 10s fixe — calibrage au montage Shotstack
+    const mode   = project._klingMode || 'standard';
+    const aspect = project._klingAspect || '16:9';
     const existingCount = (project.rushes || []).filter(r => r.sectionIndex === sectionIndex).length;
 
-    for (const shot of shots) {
-      const dur = shot.duration || 5;
-      if (current.length >= 6 || currentDur + dur > 15) {
-        if (current.length > 0) {
-          rushes.push(this._makeRushItem(current, sectionIndex, sectionLabel, sectionType, existingCount + rushes.length, mode, aspect));
-        }
-        current    = [shot];
-        currentDur = dur;
-      } else {
-        current.push(shot);
-        currentDur += dur;
-      }
-    }
-    if (current.length > 0) {
-      rushes.push(this._makeRushItem(current, sectionIndex, sectionLabel, sectionType, existingCount + rushes.length, mode, aspect));
-    }
-
-    return rushes;
+    return shots.map((shot, i) =>
+      this._makeRushItem([shot], sectionIndex, sectionLabel, sectionType, existingCount + i, mode, aspect)
+    );
   },
 
   _makeRushItem(shots, sectionIndex, sectionLabel, sectionType, num, mode, aspect) {

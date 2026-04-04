@@ -505,7 +505,8 @@ Monter pour l'émotion et la lisibilité d'abord. Toute coupe doit : révéler, 
     const avgShotDur  = Math.max(3, Math.round(rawAvgDur));  // Kling 3 min = 3s
 
     const totalDuration = sectionDuration || 25;
-    const shotCount     = Math.max(1, Math.round(totalDuration / avgShotDur));
+    // Durée fixe 10s par rush — shotCount = nb de clips 10s pour couvrir la section
+    const shotCount     = Math.max(1, Math.ceil(totalDuration / 10));
 
     // Packer les shots en rushes (max 6 shots, max 15s)
     const rushGroups = [];
