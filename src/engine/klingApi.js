@@ -136,12 +136,17 @@ const KlingAPI = (() => {
 
     if (shots.length === 0) throw new Error('Aucun shot défini');
 
+    // mode : l'API Replicate attend "standard" ou "pro" (pas "std")
+    const modeRaw = multishot.mode || 'standard';
+    const mode    = modeRaw === 'std' ? 'standard' : modeRaw;
+
     const input = {
-      multi_prompt:    shots,
+      prompt:          shots.map(s => s.prompt).join(' '),   // champ obligatoire
+      multi_prompt:    JSON.stringify(shots),                 // string JSON, pas array
       multi_shot_type: 'customize',
       negative_prompt: multishot.negativePrompt || 'blurry, low quality, watermark, text overlay, distorted, overexposed, amateur, static shot, shaky',
       cfg_scale:       0.5,
-      mode:            multishot.mode        || 'std',
+      mode,
       aspect_ratio:    multishot.aspectRatio || '16:9',
     };
 
