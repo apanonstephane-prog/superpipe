@@ -50,6 +50,9 @@ const ModuleShots = {
       ` : ''}
 
 
+      <!-- ── QA CONTROLLER ── -->
+      ${this.renderQAController(p, sections, tags)}
+
       <!-- ── RÉFÉRENCES VISUELLES ── -->
       ${this.renderRefTags(tags)}
 
@@ -140,6 +143,82 @@ const ModuleShots = {
           </div>
         ` : ''}
       </div>`;
+  },
+
+  renderQAController(p, sections, tags) {
+    const bp = p.intent || {};
+    const qaScore = bp.qaScore || 0;
+    const qaColor = qaScore >= 80 ? '#22c55e' : qaScore >= 60 ? 'var(--warning)' : 'var(--danger)';
+
+    const sectionsWithContent = sections.filter(s => s.content?.trim()).length;
+    const lockedChars = (p.characters || []).filter(c => c.locked && c.generatedBase).length;
+    const lockedLocs  = (p.locations  || []).filter(l => l.locked && l.imageUrl).length;
+    const lockedObjs  = (p.objects    || []).filter(o => o.locked && o.imageUrl).length;
+
+    const checks = [
+      { ok: sections.length > 0,         label: 'Script parsé',             count: `${sections.length} sections` },
+      { ok: sectionsWithContent === sections.length && sections.length > 0,
+                                          label: 'Sections avec contenu',    count: `${sectionsWithContent}/${sections.length}` },
+      { ok: lockedChars > 0,             label: 'Personnages générés+lock', count: `${lockedChars} verrouillé(s)` },
+      { ok: lockedLocs > 0,              label: 'Lieux générés+lock',       count: `${lockedLocs} verrouillé(s)` },
+      { ok: ClaudeAPI.isConfigured(),    label: 'OpenRouter API',           count: ClaudeAPI.isConfigured() ? 'Configurée' : 'Mode interne' },
+      { ok: KlingAPI.isConfigured(),     label: 'Replicate API',            count: KlingAPI.isConfigured() ? 'Configurée' : 'MOCK mode' },
+    ];
+
+    const readyCount = checks.filter(c => c.ok).length;
+    const readyPct   = Math.round((readyCount / checks.length) * 100);
+
+    const warnings = [];
+    if (!sections.some(s => s.content?.trim())) warnings.push('Les sections du script sont vides — ajoute du contenu pour des prompts Kling plus précis');
+    if (lockedChars === 0 && (p.characters || []).length > 0) warnings.push('Des personnages existent mais ne sont pas générés/verrouillés — utilise Auto Build → Générer assets');
+    if (lockedLocs === 0 && (p.locations || []).length > 0) warnings.push('Des lieux existent mais ne sont pas générés/verrouillés — utilise Auto Build → Générer assets');
+
+    return `
+      <div class="card" style="margin-bottom:16px;border-color:${readyPct >= 80 ? 'rgba(34,197,94,0.3)' : readyPct >= 50 ? 'rgba(251,191,36,0.3)' : 'rgba(239,68,68,0.3)'}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="card-title" style="margin:0;font-size:12px">🎯 CONTRÔLEUR QA PIPELINE</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            ${qaScore > 0 ? `<span style="font-family:var(--font-mono);font-size:10px;color:${qaColor}">QA ${qaScore}/100</span>` : ''}
+            <span style="font-family:var(--font-mono);font-size:10px;color:${readyPct >= 80 ? '#22c55e' : 'var(--warning)'}">PRÊT ${readyPct}%</span>
+          </div>
+        </div>
+
+        <!-- Jauge globale -->
+        <div style="height:4px;background:var(--bg-3);border-radius:2px;overflow:hidden;margin-bottom:12px">
+          <div style="height:100%;background:${readyPct >= 80 ? '#22c55e' : readyPct >= 50 ? 'var(--warning)' : 'var(--danger)'};border-radius:2px;width:${readyPct}%;transition:width 0.5s"></div>
+        </div>
+
+        <!-- Checklist -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:${warnings.length > 0 ? '12px' : '0'}">
+          ${checks.map(c => `
+            <div style="background:var(--bg-3);border-radius:6px;padding:6px 8px;display:flex;align-items:center;gap:6px">
+              <span style="font-size:10px">${c.ok ? '✅' : '🔘'}</span>
+              <div>
+                <div style="font-size:9px;color:${c.ok ? 'var(--text-1)' : 'var(--text-3)';font-family:var(--font-mono)">${c.label}</div>
+                <div style="font-size:8px;color:${c.ok ? 'var(--accent)' : 'var(--text-3)';font-family:var(--font-mono)">${c.count}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        ${warnings.length > 0 ? `
+          <div style="border-top:1px solid var(--border);padding-top:10px">
+            ${warnings.map(w => `
+              <div style="font-size:10px;color:var(--warning);line-height:1.4;margin-bottom:4px">⚠ ${escHtml(w)}</div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        ${(bp.hypotheses || []).length > 0 ? `
+          <details style="margin-top:8px">
+            <summary style="font-size:9px;font-family:var(--font-mono);color:var(--text-3);cursor:pointer;letter-spacing:1px">HYPOTHÈSES AUTO BUILD (${bp.hypotheses.length})</summary>
+            <div style="margin-top:6px;padding:8px;background:var(--bg-3);border-radius:6px">
+              ${bp.hypotheses.map(h => `<div style="font-size:9px;color:var(--text-2);line-height:1.5">◈ ${escHtml(h)}</div>`).join('')}
+            </div>
+          </details>
+        ` : ''}
+      </div>
+    `;
   },
 
   renderRefTags(tags) {
@@ -430,7 +509,20 @@ const ModuleShots = {
       Toast.error('Section introuvable'); return;
     }
 
-    const section    = { ...p.scriptSections[sectionIndex], _position: this._getSectionPosition(sectionIndex, p.scriptSections.length) };
+    let section    = { ...p.scriptSections[sectionIndex], _position: this._getSectionPosition(sectionIndex, p.scriptSections.length) };
+
+    // ── CONTRÔLEUR DE COHÉRENCE ──────────────────────────────────────
+    // Si la section n'a pas de contenu, générer une description automatique
+    if (!section.content?.trim()) {
+      const sectionDef = PromptEngine.SECTION_TYPES[section.type] || PromptEngine.SECTION_TYPES['verse'];
+      const playbook   = PromptEngine.getPlaybook(p.genre) || PromptEngine.getPlaybook('hip-hop');
+      section = {
+        ...section,
+        content: `${sectionDef.klingHint}. ${playbook.klingStyle}. ${section.label || section.type} — séquence visuelle cinématique.`,
+      };
+      Toast.info(`Section "${section.label}" sans contenu — description auto générée`);
+    }
+
     const sectionDur = PromptEngine.estimateSectionDuration(p, sectionIndex);
     const plan       = PromptEngine.planSectionRushes(section, p, sectionDur);
     const { tags }   = KlingAPI.buildReferenceImages(p);

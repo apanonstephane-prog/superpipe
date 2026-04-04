@@ -444,18 +444,188 @@ Prompt original : "${prompt}"`,
           </div>
         ` : ''}
 
+        <!-- Générer assets automatiquement -->
+        <div style="border-top:1px solid var(--border-1);padding-top:12px;margin-bottom:10px">
+          <div style="font-size:10px;color:var(--text-3);margin-bottom:8px;font-family:var(--font-mono)">GÉNÉRATION AUTOMATIQUE DES ASSETS</div>
+          <button class="btn btn-primary" id="btn-gen-assets" onclick="ModuleProject.generateBlueprintAssets()"
+                  style="width:100%;font-size:12px;font-weight:700;letter-spacing:0.05em">
+            ⚡ GÉNÉRER PERSONNAGES + LIEUX
+          </button>
+          <div id="assets-gen-progress" style="display:none;margin-top:10px"></div>
+        </div>
+
         <!-- Navigation pipeline -->
         <div style="border-top:1px solid var(--border-1);padding-top:12px">
-          <div style="font-size:10px;color:var(--text-3);margin-bottom:8px;font-family:var(--font-mono)">ÉTAPES SUIVANTES</div>
+          <div style="font-size:10px;color:var(--text-3);margin-bottom:8px;font-family:var(--font-mono)">PIPELINE</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            ${(bp.characters || []).length > 0 ? `<button class="btn btn-ghost btn-sm" onclick="App.goTo('cref')">→ Générer portraits</button>` : ''}
-            ${(bp.locations || []).length > 0 ?  `<button class="btn btn-ghost btn-sm" onclick="App.goTo('lref')">→ Générer lieux</button>` : ''}
-            <button class="btn btn-ghost btn-sm" onclick="App.goTo('script')">→ Voir le script</button>
-            <button class="btn btn-primary btn-sm" onclick="App.goTo('shots')">→ Lancer les shots</button>
+            <button class="btn btn-ghost btn-sm" onclick="App.goTo('script')">→ Script</button>
+            <button class="btn btn-ghost btn-sm" onclick="App.goTo('cref')">→ Personnages</button>
+            <button class="btn btn-ghost btn-sm" onclick="App.goTo('lref')">→ Lieux</button>
+            <button class="btn btn-ghost btn-sm" onclick="ModuleProject.exportProject()">📦 Exporter</button>
+            <button class="btn btn-primary btn-sm" onclick="App.goTo('shots')">→ Shots Kling</button>
           </div>
         </div>
       </div>
     `;
+  },
+
+  // ── Génération auto des assets depuis le blueprint ───────────────────
+
+  async generateBlueprintAssets() {
+    const p = State.currentProject();
+    if (!p) return;
+    const bp = p.intent;
+    if (!bp) { Toast.error('Lance d\'abord un Auto Build'); return; }
+
+    const btn = document.getElementById('btn-gen-assets');
+    const progressEl = document.getElementById('assets-gen-progress');
+    if (btn) btn.disabled = true;
+    if (progressEl) progressEl.style.display = 'block';
+
+    const chars = p.characters || [];
+    const locs  = p.locations  || [];
+    const total  = chars.length + locs.length;
+    let done = 0;
+
+    const updateProgress = (label) => {
+      if (!progressEl) return;
+      const pct = Math.round((done / Math.max(1, total)) * 100);
+      progressEl.innerHTML = `
+        <div style="font-size:10px;color:var(--text-2);font-family:var(--font-mono);margin-bottom:4px">${escHtml(label)}</div>
+        <div style="height:4px;background:var(--bg-3);border-radius:2px;overflow:hidden">
+          <div style="height:100%;background:var(--accent);border-radius:2px;width:${pct}%;transition:width 0.4s"></div>
+        </div>
+        <div style="font-size:9px;color:var(--text-3);margin-top:3px">${done}/${total} assets</div>
+      `;
+    };
+
+    updateProgress('Démarrage...');
+
+    // Générer les personnages
+    for (let i = 0; i < chars.length; i++) {
+      const c = chars[i];
+      if (c.generatedBase) { done++; updateProgress(`Personnage déjà généré : ${c.name}`); continue; }
+      updateProgress(`Génération : ${c.name}...`);
+      try {
+        const desc = c.description || c.name;
+        const prompt = `${desc}, portrait, photorealistic, professional photography, sharp focus, studio lighting`;
+        const imageUrl = await NanaBananaAPI.generateAndWait(
+          { prompt, imageInputs: [], aspectRatio: '2:3', resolution: '1K' },
+          (pct) => updateProgress(`${c.name} — ${pct}%`)
+        );
+        State.updateCharacter(c.id, { generatedBase: imageUrl, locked: true });
+        done++;
+        updateProgress(`✅ ${c.name} généré`);
+      } catch (e) {
+        console.error('Asset gen error (char):', e);
+        Toast.error(`Erreur ${c.name}: ${e.message?.substring(0, 40)}`);
+        done++;
+      }
+    }
+
+    // Générer les lieux
+    for (let i = 0; i < locs.length; i++) {
+      const l = locs[i];
+      if (l.imageUrl) { done++; updateProgress(`Lieu déjà généré : ${l.name}`); continue; }
+      updateProgress(`Génération lieu : ${l.name}...`);
+      try {
+        const desc = l.promptDesc || l.description || l.name;
+        const mood = l.mood ? `, ${l.mood}` : '';
+        const prompt = `${desc}${mood}, photorealistic, cinematic, professional photography, sharp focus, dramatic lighting`;
+        const p2 = State.currentProject();
+        const aspectRatio = p2?.aspectRatio || '16:9';
+        const imageUrl = await NanaBananaAPI.generateAndWait(
+          { prompt, imageInputs: [], aspectRatio, resolution: '1K' },
+          (pct) => updateProgress(`${l.name} — ${pct}%`)
+        );
+        State.updateLocation(l.id, { imageUrl, locked: true });
+        done++;
+        updateProgress(`✅ ${l.name} généré`);
+      } catch (e) {
+        console.error('Asset gen error (loc):', e);
+        Toast.error(`Erreur ${l.name}: ${e.message?.substring(0, 40)}`);
+        done++;
+      }
+    }
+
+    if (progressEl) {
+      progressEl.innerHTML = `
+        <div style="font-size:11px;color:#22c55e;font-family:var(--font-mono)">✅ ${done}/${total} assets générés et verrouillés — prêt pour Kling 3</div>
+      `;
+    }
+    if (btn) btn.disabled = false;
+    App.updateBadges();
+    App.updateSidebarStats();
+    Toast.success(`${done} assets générés et verrouillés`);
+  },
+
+  // ── Export dossier de production ─────────────────────────────────────
+
+  exportProject() {
+    const p = State.currentProject();
+    if (!p) return;
+    const bp = p.intent || {};
+
+    const lines = [
+      `╔══════════════════════════════════════════════════`,
+      `║  DOSSIER DE PRODUCTION — ${(p.name || '').toUpperCase()}`,
+      `║  Généré le ${new Date().toLocaleDateString('fr-FR')}`,
+      `╚══════════════════════════════════════════════════`,
+      ``,
+      `■ BRIEF`,
+      `  Intention  : ${bp.intent || p.description || ''}`,
+      `  Genre      : ${p.genre || ''}`,
+      `  BPM        : ${p.bpm || ''}`,
+      `  Format     : ${p.aspectRatio || '16:9'} — ${p.platform || ''}`,
+      `  Durée      : ${p.duration || ''}`,
+      `  Style      : ${p.style || ''}`,
+      `  Palette    : ${p.colorPalette || ''}`,
+      `  Caméra     : ${p.cameraLanguage || ''}`,
+      `  Ton        : ${p.tone || ''}`,
+      ``,
+      `■ PERSONNAGES (${(p.characters || []).length})`,
+      ...(p.characters || []).map(c =>
+        `  [${c.locked ? '✓' : ' '}] ${c.name}${c.description ? ' — ' + c.description : ''}`
+      ),
+      ``,
+      `■ LIEUX (${(p.locations || []).length})`,
+      ...(p.locations || []).map(l =>
+        `  [${l.locked ? '✓' : ' '}] ${l.name}${l.mood ? ' — ' + l.mood : ''}`
+      ),
+      ``,
+      `■ OBJETS / PROPS (${(p.objects || []).length})`,
+      ...(p.objects || []).map(o =>
+        `  [${o.locked ? '✓' : ' '}] ${o.name}${o.description ? ' — ' + o.description : ''}`
+      ),
+      ``,
+      `■ SCRIPT — ${(p.scriptSections || []).length} sections`,
+      ...(p.scriptSections || []).flatMap(s => [
+        ``,
+        `  [${s.label || s.type}]`,
+        `  ${s.content || '(vide)'}`,
+      ]),
+      ``,
+      `■ SHOTS (${(p.rushes || []).length} rushes)`,
+      ...(p.rushes || []).map(r =>
+        `  [${r.status}] ${r.name} — ${r.shots?.length || 0} shots${r.validated ? ' ✓ validé' : ''}`
+      ),
+      ``,
+      `■ QA`,
+      `  Score      : ${bp.qaScore || '—'}/100`,
+      `  Budget est.: ${bp.budgetEstimate || '—'}`,
+      bp.hypotheses?.length ? `  Hypothèses : ${bp.hypotheses.join(' | ')}` : '',
+      bp.risks?.length ? `  Risques    : ${bp.risks.join(' | ')}` : '',
+    ].filter(l => l !== null && l !== undefined);
+
+    const text = lines.join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${(p.name || 'production').replace(/\s+/g, '_')}_dossier.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    Toast.success('Dossier exporté');
   },
 
   // ── Actions genre / modèle ──

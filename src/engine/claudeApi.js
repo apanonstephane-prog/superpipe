@@ -84,13 +84,21 @@ RULES:
 RESPONSE FORMAT:
 {"shots":[{"prompt":"...","negativePrompt":"...","duration":X,"description":"brief label"}]}`;
 
+    const style      = project.style        || '';
+    const colorPal   = project.colorPalette  || '';
+    const camLang    = project.cameraLanguage || '';
+    const tone       = project.tone           || '';
+
     const userPrompt = `Generate exactly ${shotCount} Kling 3 multishot prompts for this music video section.
 
 ═══ PROJECT CONTEXT ═══
 Genre: ${project.genre || 'hip-hop'} | ${playbook.label}
 BPM: ${bpm} → beat = ${beatDur}s
 Average shot duration: ${avgDur}s
-Visual style: ${playbook.klingStyle}
+Visual style: ${playbook.klingStyle}${style ? ` | ${style}` : ''}
+${colorPal   ? `Color palette: ${colorPal}` : ''}
+${camLang    ? `Camera language: ${camLang}` : ''}
+${tone       ? `Emotional tone: ${tone}` : ''}
 Camera approach: ${playbook.motionHint}
 Project concept: ${project.description || 'music video clip'}
 

@@ -341,13 +341,19 @@ Rules:
     const p = State.currentProject();
     if (!p) throw new Error('Aucun projet actif');
 
-    // 1. Paramètres projet
+    // 1. Paramètres projet (incluant style, colorPalette, cameraLanguage du blueprint)
     State.updateProject({
-      description:  blueprint.intent,
-      genre:        blueprint.genre,
-      bpm:          blueprint.bpm || p.bpm || '',
-      duration:     blueprint.duration > 0 ? _formatDuration(blueprint.duration) : p.duration,
-      intent:       blueprint,  // stocker le blueprint complet
+      description:    blueprint.intent,
+      genre:          blueprint.genre,
+      bpm:            blueprint.bpm || p.bpm || '',
+      duration:       blueprint.duration > 0 ? _formatDuration(blueprint.duration) : p.duration,
+      aspectRatio:    blueprint.aspectRatio  || p.aspectRatio  || '16:9',
+      style:          blueprint.style        || p.style        || '',
+      colorPalette:   blueprint.colorPalette || p.colorPalette || '',
+      cameraLanguage: blueprint.cameraLanguage || p.cameraLanguage || '',
+      tone:           blueprint.tone         || p.tone         || '',
+      platform:       blueprint.platform     || p.platform     || '',
+      intent:         blueprint,  // stocker le blueprint complet
     });
 
     // 2. Script sections (remplace si vide, propose sinon)
@@ -392,6 +398,23 @@ Rules:
           angles:     [],
         });
       });
+    }
+
+    // 5. Objets suggérés depuis le blueprint (ajouter si vide)
+    if ((p.objects || []).length === 0 && (blueprint.objects || []).length > 0) {
+      const updatedP = State.currentProject();
+      const newObjs = blueprint.objects.map((o, i) => ({
+        id:          `obj_${Date.now()}_${i}`,
+        name:        o.name,
+        category:    'prop',
+        description: o.description,
+        imageUrl:    null,
+        generating:  false,
+        locked:      false,
+        importance:  o.importance || 'prop',
+        type:        'suggested',
+      }));
+      State.updateProject({ objects: newObjs });
     }
   }
 

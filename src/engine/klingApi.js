@@ -69,24 +69,29 @@ const KlingAPI = (() => {
     const tags = { chars: [], locs: [], objs: [] };
     let imgIdx = 1;
 
-    // Personnages — tenue verrouillée en priorité, sinon photo de base
+    // Replicate n'accepte que des URLs HTTP — jamais du base64 (data:image/...)
+    const isHttpUrl = (s) => typeof s === 'string' && s.startsWith('http');
+
+    // Personnages — tenue verrouillée en priorité, sinon generatedBase (URL NanaBanana)
+    // c.base64 = upload utilisateur (base64 brut) → JAMAIS envoyé à Replicate
     for (const c of lockedChars) {
       if (imgIdx > 7) break;
       const lockedTenue = (c.tenues || []).find(t => t.locked && t.imageUrl);
-      const src = lockedTenue?.imageUrl || c.base64 || c.generatedBase;
-      if (src) {
+      const src = lockedTenue?.imageUrl || c.generatedBase;
+      if (isHttpUrl(src)) {
         referenceImages.push(src);
         tags.chars.push({ name: c.name, tag: `<<<image_${imgIdx}>>>` });
         imgIdx++;
       }
     }
 
-    // Lieux — angle verrouillé en priorité, sinon image principale
+    // Lieux — angle verrouillé en priorité, sinon imageUrl (URL NanaBanana)
+    // l.base64 = upload utilisateur → JAMAIS envoyé à Replicate
     for (const l of lockedLocs) {
       if (imgIdx > 7) break;
       const lockedAngle = (l.angles || []).find(a => a.locked && a.imageUrl);
-      const src = lockedAngle?.imageUrl || l.imageUrl || l.base64;
-      if (src) {
+      const src = lockedAngle?.imageUrl || l.imageUrl;
+      if (isHttpUrl(src)) {
         referenceImages.push(src);
         tags.locs.push({ name: l.name, tag: `<<<image_${imgIdx}>>>` });
         imgIdx++;
