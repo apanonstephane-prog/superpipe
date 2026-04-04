@@ -309,24 +309,23 @@ const ModuleProject = {
     if (!prompt) { Toast.error('Entre d\'abord un prompt à améliorer'); return; }
 
     const cfg = State.getConfig();
-    if (!cfg.claudeApiKey) {
-      Toast.info('Clé Claude nécessaire pour améliorer le prompt — amélioration locale appliquée');
-      el.value = `${prompt}, style cinématique professionnel, haute qualité, éclairage dramatique, composition soignée`;
+    if (!cfg.openrouterApiKey) {
+      Toast.info('Clé OpenRouter nécessaire — entre ta clé sk-or-v1-... dans la barre API');
       return;
     }
 
     Toast.info('Amélioration du prompt...');
     try {
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'x-api-key': cfg.claudeApiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-          'anthropic-dangerous-direct-browser-access': 'true',
+          'Authorization': `Bearer ${cfg.openrouterApiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://superpipe.app',
+          'X-Title': 'SuperPipe',
         },
         body: JSON.stringify({
-          model: 'claude-opus-4-5',
+          model: cfg.openrouterModel || 'anthropic/claude-sonnet-4-6',
           max_tokens: 300,
           messages: [{
             role: 'user',
@@ -340,7 +339,7 @@ Prompt original : "${prompt}"`,
         }),
       });
       const data = await resp.json();
-      const improved = data.content?.[0]?.text?.trim();
+      const improved = data.choices?.[0]?.message?.content?.trim();
       if (improved && el) {
         el.value = improved;
         Toast.success('Prompt amélioré ✓');
