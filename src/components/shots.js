@@ -194,8 +194,8 @@ const ModuleShots = {
             <div style="background:var(--bg-3);border-radius:6px;padding:6px 8px;display:flex;align-items:center;gap:6px">
               <span style="font-size:10px">${c.ok ? '✅' : '🔘'}</span>
               <div>
-                <div style="font-size:9px;color:${c.ok ? 'var(--text-1)' : 'var(--text-3)';font-family:var(--font-mono)">${c.label}</div>
-                <div style="font-size:8px;color:${c.ok ? 'var(--accent)' : 'var(--text-3)';font-family:var(--font-mono)">${c.count}</div>
+                <div style="font-size:9px;font-family:var(--font-mono);color:${c.ok ? 'var(--text-1)' : 'var(--text-3)'}">${c.label}</div>
+                <div style="font-size:8px;font-family:var(--font-mono);color:${c.ok ? 'var(--accent)' : 'var(--text-3)'}">${c.count}</div>
               </div>
             </div>
           `).join('')}
