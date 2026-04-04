@@ -1,33 +1,33 @@
 /* ─────────────────────────────────────────
-   SUPER PIPE — Design System (style ARA)
-   Noir profond · Or · Space Mono · Syne
+   SUPER PIPE — Design System
+   Ivoire · Or · Space Mono · Syne
 ───────────────────────────────────────── */
 
 :root {
-  --accent:        #C9A84C;
-  --accent-dim:    rgba(201,168,76,0.10);
-  --accent-border: rgba(201,168,76,0.30);
-  --accent-glow:   rgba(201,168,76,0.05);
+  --accent:        #B8922A;
+  --accent-dim:    rgba(184,146,42,0.12);
+  --accent-border: rgba(184,146,42,0.35);
+  --accent-glow:   rgba(184,146,42,0.06);
 
-  --bg-0:  #0d0d0d;
-  --bg-1:  #111111;
-  --bg-2:  #161616;
-  --bg-3:  #1c1c1c;
-  --bg-4:  #242424;
+  --bg-0:  #F5F0E8;
+  --bg-1:  #EDE8DF;
+  --bg-2:  #E4DDD0;
+  --bg-3:  #D8D0C0;
+  --bg-4:  #CCC3B0;
 
-  --text-0: #e8e4d8;
-  --text-1: #b8b4a8;
-  --text-2: #6a6860;
-  --text-3: #3a3830;
+  --text-0: #1a1710;
+  --text-1: #2e2b20;
+  --text-2: #5a5540;
+  --text-3: #8a8470;
 
-  --border:      rgba(255,255,255,0.06);
-  --border-mid:  rgba(255,255,255,0.10);
-  --border-gold: rgba(201,168,76,0.22);
+  --border:      rgba(90,80,50,0.12);
+  --border-mid:  rgba(90,80,50,0.20);
+  --border-gold: rgba(184,146,42,0.35);
 
-  --locked:     #4a9e6a;
-  --locked-dim: rgba(74,158,106,0.12);
-  --danger:     #c0392b;
-  --warning:    #d4901a;
+  --locked:     #2d7a4a;
+  --locked-dim: rgba(45,122,74,0.12);
+  --danger:     #b02a20;
+  --warning:    #b07010;
 
   --sidebar-w: 168px;
   --topbar-h:  52px;
