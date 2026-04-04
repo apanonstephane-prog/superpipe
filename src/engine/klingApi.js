@@ -140,10 +140,14 @@ const KlingAPI = (() => {
     const modeRaw = multishot.mode || 'standard';
     const mode    = modeRaw === 'std' ? 'standard' : modeRaw;
 
+    // duration totale = somme exacte des durées de shots (obligatoire pour Kling 3)
+    const totalDuration = shots.reduce((sum, s) => sum + s.duration, 0);
+
     const input = {
       prompt:          shots[0]?.prompt || '',   // champ obligatoire — premier shot suffit
-      multi_prompt:    JSON.stringify(shots),                 // string JSON, pas array
+      multi_prompt:    JSON.stringify(shots),     // string JSON, pas array
       multi_shot_type: 'customize',
+      duration:        totalDuration,             // OBLIGATOIRE : doit égaler la somme des shots
       negative_prompt: multishot.negativePrompt || 'blurry, low quality, watermark, text overlay, distorted, overexposed, amateur, static shot, shaky',
       cfg_scale:       0.5,
       mode,

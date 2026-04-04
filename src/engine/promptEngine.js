@@ -537,10 +537,34 @@ Monter pour l'émotion et la lisibilité d'abord. Toute coupe doit : révéler, 
    * @returns {number} durée en secondes
    */
   function estimateSectionDuration(project, sectionIndex) {
-    const sections      = project.scriptSections || [];
-    const trackDuration = project.musicTrack?.duration || 180;
-    if (sections.length === 0) return trackDuration;
-    return trackDuration / sections.length;
+    const sections = project.scriptSections || [];
+    if (sections.length === 0) return 30;
+
+    // 1. Durée explicite dans la section (blueprint Claude)
+    const sec = sections[sectionIndex];
+    if (sec?.duration && sec.duration > 0) return sec.duration;
+
+    // 2. Durée de la piste audio uploadée
+    if (project.musicTrack?.duration) {
+      return project.musicTrack.duration / sections.length;
+    }
+
+    // 3. Durée du projet (format "1:30" ou secondes)
+    if (project.duration) {
+      const raw = String(project.duration);
+      let totalSec = 0;
+      if (raw.includes(':')) {
+        const [m, s] = raw.split(':').map(Number);
+        totalSec = m * 60 + (s || 0);
+      } else {
+        totalSec = parseFloat(raw) || 0;
+      }
+      if (totalSec > 0) return totalSec / sections.length;
+    }
+
+    // 4. Fallback raisonnable : 30s pour une pub, 25s pour un clip
+    const genre = project.genre || '';
+    return genre === 'pub' ? 30 / sections.length : 25;
   }
 
   // ── Check-list QC Document Fondation §7 ──
