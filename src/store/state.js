@@ -66,6 +66,23 @@ const State = (() => {
       // Modèle Kling pour ce projet (override config globale si défini)
       klingModel: '',     // '' = hérite de config | nano | standard | pro | kling3
 
+      // Text overlays (injectés dans la timeline Shotstack)
+      textOverlays: [],  // [{id, text, start, duration, position, fontSize, color}]
+
+      // End card final
+      endCard: {
+        enabled:      true,
+        duration:     4,
+        title:        '',
+        subtitle:     '',
+        lines:        [],        // lignes de contact : adresse, tel, email, web
+        bgColor:      '#F5F0E8',
+        textColor:    '#1a1710',
+        accentColor:  '#B8922A',
+        logoBase64:   null,      // logo uploadé (data:image/...)
+        logoPosition: 'top-center',
+      },
+
       // Montage
       montageJobId: null,
       montageStatus: null,  // null | 'rendering' | 'done' | 'error'

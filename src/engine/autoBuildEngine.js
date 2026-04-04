@@ -323,16 +323,24 @@ Rules:
   async function parse(prompt) {
     if (!prompt?.trim()) throw new Error('Prompt vide');
 
+    // Extraire contacts depuis le prompt brut (indépendant de Claude)
+    const contacts = _extractContacts(prompt);
+
     // Essayer Claude en premier
     try {
       const claudeResult = await _parseWithClaude(prompt);
-      if (claudeResult) return claudeResult;
+      if (claudeResult) {
+        claudeResult.contacts = { ...contacts, ...claudeResult.contacts };
+        return claudeResult;
+      }
     } catch (e) {
       console.warn('AutoBuild: Claude indisponible, fallback interne :', e.message);
     }
 
     // Fallback interne toujours disponible
-    return _fallbackParse(prompt);
+    const bp = _fallbackParse(prompt);
+    bp.contacts = contacts;
+    return bp;
   }
 
   // ── APPLICATION DU BLUEPRINT AU PROJET ──────────────────────────────
@@ -416,6 +424,70 @@ Rules:
       }));
       State.updateProject({ objects: newObjs });
     }
+
+    // 6. Text overlays auto depuis le blueprint
+    const currentP = State.currentProject();
+    if ((currentP.textOverlays || []).length === 0) {
+      const dur      = blueprint.duration || 30;
+      const texts    = blueprint.onScreenText || _defaultOverlays(blueprint);
+      const spacing  = dur / Math.max(1, texts.length + 1);
+      const overlays = texts.map((text, i) => ({
+        id:       `ov_${Date.now()}_${i}`,
+        text,
+        start:    Math.round(spacing * (i + 0.5) * 10) / 10,
+        duration: 3,
+        position: i === 0 ? 'top' : 'bottom',
+        fontSize: i === 0 ? 38 : 30,
+        color:    '#ffffff',
+      }));
+      State.updateProject({ textOverlays: overlays });
+    }
+
+    // 7. End card depuis contacts parsés du prompt + nom du projet
+    const contacts = blueprint.contacts || {};
+    const currentP2 = State.currentProject();
+    const ec = currentP2.endCard || {};
+    if (!ec.title) {
+      const lines = [
+        contacts.address,
+        contacts.phone,
+        contacts.email,
+        contacts.website,
+      ].filter(Boolean);
+      State.updateProject({
+        endCard: {
+          ...ec,
+          title:    blueprint.brandName || blueprint.deliverable?.toUpperCase() || currentP2.name || '',
+          subtitle: blueprint.tagline   || blueprint.intent?.substring(0, 60)   || '',
+          lines,
+        },
+      });
+    }
+  }
+
+  // Génère une séquence de textes par défaut depuis le blueprint si aucun n'est spécifié
+  function _defaultOverlays(bp) {
+    const texts = [];
+    if (bp.genre === 'pub' || bp.deliverable === 'pub') {
+      if (bp.intent)   texts.push(bp.intent.substring(0, 50));
+      if (bp.style)    texts.push(bp.style.substring(0, 50));
+    } else {
+      // Clip / film : une ligne par section principale
+      (bp.scriptSections || []).slice(0, 4).forEach(s => {
+        if (s.label) texts.push(s.label);
+      });
+    }
+    return texts.length > 0 ? texts : ['Découvrez notre univers'];
+  }
+
+  // Extrait les contacts d'un texte brut (pour le prompt AFAPE-style)
+  function _extractContacts(text) {
+    if (!text) return {};
+    const email   = text.match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0]    || '';
+    const phone   = text.match(/0[1-9](?:[\s.-]?\d{2}){4}/)?.[0]        || '';
+    const website = text.match(/(?:www\.|https?:\/\/)[^\s,)]+/i)?.[0]   || '';
+    const address = text.match(/\d+\s+(?:bis\s+|ter\s+)?(?:rue|avenue|av\.|bd|boulevard|allée|impasse|place)[^,\n]*/i)?.[0] || '';
+    return { email, phone, website, address };
   }
 
   function _formatDuration(seconds) {

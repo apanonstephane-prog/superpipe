@@ -68,10 +68,78 @@ const ShotstackAPI = (() => {
       soundtrack = { src: project.musicTrack.base64, effect: 'fadeOut', volume: 1 };
     }
 
+    const tracks = [{ clips: trackClips }];
+
+    // ── Text overlays track ──
+    const overlays = project.textOverlays || [];
+    if (overlays.length > 0) {
+      const textClips = overlays.map(ov => ({
+        asset: {
+          type: 'text',
+          text: ov.text || '',
+          width: 900,
+          height: 120,
+          style: 'future',
+          color: ov.color || '#ffffff',
+          size: ov.size || 40,
+          background: 'transparent',
+          position: ov.position || 'bottom',
+        },
+        start: ov.start || 0,
+        length: ov.duration || 3,
+        transition: { in: 'fadeIn', out: 'fadeOut' },
+      }));
+      tracks.push({ clips: textClips });
+    }
+
+    // ── End card ──
+    const ec = project.endCard;
+    if (ec && ec.enabled) {
+      const ecDuration = ec.duration || 4;
+      const contactLines = (ec.lines || []).filter(Boolean).join('<br/>');
+      const ecHtml = `<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:${ec.bgColor || '#F5F0E8'};font-family:sans-serif;padding:60px;box-sizing:border-box;">
+  ${ec.title ? `<h1 style="color:${ec.accentColor || '#B8922A'};font-size:72px;margin:0 0 16px;text-align:center;">${ec.title}</h1>` : ''}
+  ${ec.subtitle ? `<h2 style="color:${ec.textColor || '#1a1710'};font-size:40px;margin:0 0 32px;text-align:center;font-weight:400;">${ec.subtitle}</h2>` : ''}
+  ${contactLines ? `<p style="color:${ec.textColor || '#1a1710'};font-size:30px;text-align:center;line-height:1.6;">${contactLines}</p>` : ''}
+</div>`;
+
+      const ecClip = {
+        asset: {
+          type: 'html',
+          html: ecHtml,
+          width: 1080,
+          height: 1920,
+          background: ec.bgColor || '#F5F0E8',
+        },
+        start: currentTime,
+        length: ecDuration,
+        transition: { in: 'fade' },
+      };
+      tracks[0].clips.push(ecClip);
+
+      // Logo track (si logoBase64 présent)
+      if (ec.logoBase64) {
+        const logoPos = { 'top-left': 'topLeft', 'top-center': 'topCenter', 'top-right': 'topRight' }[ec.logoPosition] || 'topCenter';
+        tracks.push({
+          clips: [{
+            asset: {
+              type: 'image',
+              src: ec.logoBase64,
+              fit: 'none',
+              scale: 0.3,
+              position: logoPos,
+            },
+            start: currentTime,
+            length: ecDuration,
+          }]
+        });
+      }
+    }
+
     return {
       soundtrack,
       background: '#000000',
-      tracks: [{ clips: trackClips }],
+      tracks,
     };
   }
 
