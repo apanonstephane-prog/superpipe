@@ -80,6 +80,7 @@ RULES:
 4. Each shot must earn its cut — no filler shots
 5. Negative prompt must be precise and tailored to genre/section combo
 6. Return ONLY valid minified JSON — no explanation, no markdown
+7. CRITICAL: each prompt must be 400 characters maximum — be concise and dense
 
 RESPONSE FORMAT:
 {"shots":[{"prompt":"...","negativePrompt":"...","duration":X,"description":"brief label"}]}`;
