@@ -259,12 +259,12 @@ const ModuleProject = {
     if (progDiv) progDiv.style.display = 'block';
 
     const steps = [
-      [15,  'Analyse de l\'intention...'],
-      [35,  'Détection du format et du genre...'],
-      [55,  'Génération de la structure narrative...'],
-      [75,  'Définition des personnages et lieux...'],
-      [90,  'Contrôle qualité et optimisation...'],
-      [100, 'Blueprint prêt ✓'],
+      [10,  '⟳ OpenRouter → analyse du prompt...'],
+      [25,  '⟳ OpenRouter → détection format & genre...'],
+      [45,  '⟳ OpenRouter → structure narrative...'],
+      [65,  '⟳ OpenRouter → personnages & lieux...'],
+      [85,  '⟳ OpenRouter → QA & optimisation...'],
+      [99,  '⟳ OpenRouter → finalisation blueprint...'],
     ];
 
     let stepIdx = 0;
@@ -305,35 +305,40 @@ const ModuleProject = {
 
         let done = 0;
 
-        const setProgress = (label) => {
-          const pct = Math.round((done / total) * 100);
-          if (progBar) progBar.style.width = pct + '%';
+        const setProgress = (label, pct) => {
+          const p = pct !== undefined ? pct : Math.round((done / total) * 100);
+          if (progBar) progBar.style.width = p + '%';
           if (progSt)  progSt.textContent  = label;
         };
 
         // Personnages
         const chars = State.currentProject().characters || [];
         for (const c of chars) {
-          if (c.generatedBase) { done++; setProgress(`Personnage déjà généré : ${c.name}`); continue; }
-          setProgress(`Génération : ${c.name}...`);
+          // Si déjà une photo uploadée (base64) → juste verrouiller, pas de génération IA
+          if (c.base64 && !c.generatedBase) {
+            State.updateCharacter(c.id, { generatedBase: c.base64, locked: true });
+            done++; setProgress(`📸 ${c.name} — photo uploadée verrouillée`); continue;
+          }
+          if (c.generatedBase) { done++; setProgress(`✅ ${c.name} — déjà généré`); continue; }
+          setProgress(`⟳ Replicate → portrait ${c.name}...`);
           try {
             const desc = c.description || c.name;
             const imgPrompt = `${desc}, portrait, photorealistic, professional photography, sharp focus, studio lighting`;
             const imageUrl = await NanoBananaAPI.generateAndWait(
               { prompt: imgPrompt, imageInputs: [], aspectRatio: '2:3', resolution: '1K' },
-              (pct) => setProgress(`${c.name} — ${pct}%`)
+              (pct) => setProgress(`⟳ Replicate → ${c.name} ${pct}%`)
             );
             State.updateCharacter(c.id, { generatedBase: imageUrl, locked: true });
-          } catch (e) { Toast.error(`Image ${c.name}: ${e.message?.substring(0, 40)}`); }
+          } catch (e) { Toast.error(`❌ Replicate → ${c.name}: ${e.message?.substring(0, 50)}`); }
           done++;
-          setProgress(`✅ ${c.name}`);
+          setProgress(`✅ ${c.name} généré`);
         }
 
         // Lieux
         const locs = State.currentProject().locations || [];
         for (const l of locs) {
-          if (l.imageUrl) { done++; setProgress(`Lieu déjà généré : ${l.name}`); continue; }
-          setProgress(`Génération lieu : ${l.name}...`);
+          if (l.imageUrl) { done++; setProgress(`✅ ${l.name} — déjà généré`); continue; }
+          setProgress(`⟳ Replicate → lieu ${l.name}...`);
           try {
             const desc = l.promptDesc || l.description || l.name;
             const mood = l.mood ? `, ${l.mood}` : '';
@@ -352,8 +357,8 @@ const ModuleProject = {
         // Objets
         const objs = State.currentProject().objects || [];
         for (const o of objs) {
-          if (o.imageUrl) { done++; setProgress(`Objet déjà généré : ${o.name}`); continue; }
-          setProgress(`Génération objet : ${o.name}...`);
+          if (o.imageUrl) { done++; setProgress(`✅ ${o.name} — déjà généré`); continue; }
+          setProgress(`⟳ Replicate → objet ${o.name}...`);
           try {
             const desc = o.description || o.name;
             const imgPrompt = `${desc}, product photography, photorealistic, studio lighting, clean background, sharp focus, professional`;
@@ -493,25 +498,61 @@ Prompt original : "${prompt}"`,
           </div>
         ` : ''}
 
-        <!-- Assets -->
-        <div style="display:flex;gap:8px;margin-bottom:12px">
-          ${(bp.characters || []).length > 0 ? `
-            <div style="flex:1;background:var(--bg-3);border-radius:6px;padding:8px">
-              <div style="font-size:9px;font-family:var(--font-mono);color:var(--text-3);margin-bottom:6px">PERSONNAGES</div>
-              ${bp.characters.map(c => `
-                <div style="font-size:10px;color:var(--text-1);margin-bottom:2px">◉ ${escHtml(c.name)}</div>
-              `).join('')}
+        <!-- Assets — Personnages avec upload CRef intégré -->
+        ${(bp.characters || []).length > 0 ? `
+          <div style="margin-bottom:12px">
+            <div style="font-size:9px;font-family:var(--font-mono);color:var(--text-3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
+              PERSONNAGES — Clique sur 📸 pour uploader une photo de référence et verrouiller
             </div>
-          ` : ''}
-          ${(bp.locations || []).length > 0 ? `
-            <div style="flex:1;background:var(--bg-3);border-radius:6px;padding:8px">
-              <div style="font-size:9px;font-family:var(--font-mono);color:var(--text-3);margin-bottom:6px">LIEUX</div>
-              ${bp.locations.map(l => `
-                <div style="font-size:10px;color:var(--text-1);margin-bottom:2px">◫ ${escHtml(l.name)}</div>
-              `).join('')}
+            <div style="display:flex;flex-direction:column;gap:6px">
+              ${(State.currentProject()?.characters || []).map(c => {
+                const img = c.generatedBase || c.base64;
+                const locked = c.locked;
+                return `
+                  <div style="display:flex;align-items:center;gap:10px;background:var(--bg-3);border-radius:8px;padding:8px;border:1px solid ${locked ? 'rgba(34,197,94,0.3)' : 'transparent'}">
+                    <div style="width:40px;height:40px;border-radius:6px;overflow:hidden;flex-shrink:0;background:var(--bg-2);display:flex;align-items:center;justify-content:center;font-size:18px">
+                      ${img ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover">` : '👤'}
+                    </div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:11px;font-weight:600;color:var(--text-0)">${escHtml(c.name)}</div>
+                      <div style="font-size:9px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(c.description || '')}</div>
+                    </div>
+                    <div style="display:flex;gap:4px;flex-shrink:0">
+                      ${locked ? `<span style="font-size:9px;color:#22c55e;font-family:var(--font-mono)">🔒 VERROUILLÉ</span>` : ''}
+                      <label style="cursor:pointer;font-size:9px;padding:3px 8px;background:var(--bg-2);border:1px solid var(--border);border-radius:4px;color:var(--text-2)" title="Uploader une photo de référence">
+                        📸 Photo
+                        <input type="file" accept="image/*" style="display:none" onchange="ModuleProject.uploadCharRefPhoto('${c.id}', this.files[0])">
+                      </label>
+                      <button onclick="State.updateCharacter('${c.id}',{locked:${!locked}});ModuleProject.render()"
+                              style="font-size:9px;padding:3px 8px;background:${locked ? 'rgba(34,197,94,0.15)' : 'var(--bg-2)'};border:1px solid ${locked ? 'rgba(34,197,94,0.3)' : 'var(--border)'};border-radius:4px;cursor:pointer;color:${locked ? '#22c55e' : 'var(--text-3)'}">
+                        ${locked ? '🔒' : '🔓'}
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
             </div>
-          ` : ''}
-        </div>
+          </div>
+        ` : ''}
+
+        <!-- Lieux -->
+        ${(bp.locations || []).length > 0 ? `
+          <div style="margin-bottom:12px">
+            <div style="font-size:9px;font-family:var(--font-mono);color:var(--text-3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">LIEUX</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${(State.currentProject()?.locations || []).map(l => {
+                const img = l.imageUrl || l.base64;
+                return `
+                  <div style="display:flex;align-items:center;gap:6px;background:var(--bg-3);border-radius:6px;padding:6px 10px;border:1px solid ${l.locked ? 'rgba(34,197,94,0.3)' : 'transparent'}">
+                    ${img ? `<img src="${img}" style="width:28px;height:28px;border-radius:4px;object-fit:cover">` : '<span style="font-size:14px">🏛</span>'}
+                    <span style="font-size:10px;color:var(--text-1)">${escHtml(l.name)}</span>
+                    ${l.locked ? '<span style="font-size:8px;color:#22c55e">🔒</span>' : ''}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        ` : ''}
 
         <!-- Hypothèses -->
         ${(bp.hypotheses || []).length > 0 ? `
@@ -559,6 +600,20 @@ Prompt original : "${prompt}"`,
   },
 
   // ── Génération auto des assets depuis le blueprint ───────────────────
+
+  // Upload photo CRef directement depuis le blueprint
+  async uploadCharRefPhoto(charId, file) {
+    if (!file) return;
+    try {
+      const base64 = await Downloader.fileToBase64(file);
+      State.updateCharacter(charId, { base64, generatedBase: base64, locked: true });
+      Toast.success('Photo verrouillée comme référence CRef ✓');
+      this.render();
+      App.updateBadges();
+    } catch (e) {
+      Toast.error('Erreur upload photo : ' + e.message);
+    }
+  },
 
   async generateBlueprintAssets() {
     const p = State.currentProject();

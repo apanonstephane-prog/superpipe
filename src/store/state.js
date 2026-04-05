@@ -44,7 +44,7 @@ const State = (() => {
       characters: [],  // { id, name, base64, type, locked, tenues:[] }
 
       // Lieux LRef
-      locations: [],   // { id, name, base64, type, locked, variations:[] }
+      locations: [],   // { id, name, base64, type, locked, angles:[] }
 
       // Script
       scriptText: '',
@@ -208,7 +208,7 @@ const State = (() => {
   function addLocation(loc) {
     const p = currentProject();
     if (!p) return;
-    p.locations.push({ id: 'loc_' + Date.now(), locked: false, variations: [], ...loc });
+    p.locations.push({ id: 'loc_' + Date.now(), locked: false, angles: [], ...loc });
     save();
   }
   function updateLocation(id, patch) {
