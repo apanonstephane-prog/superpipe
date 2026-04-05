@@ -42,13 +42,14 @@ const AutoBuildEngine = (() => {
   };
 
   const DURATION_PATTERNS = [
-    { re: /(\d+)\s*(?:secondes?|sec|s\b)/i,  fn: m => parseInt(m[1]) },
-    { re: /(\d+)\s*(?:minutes?|min|mn)/i,    fn: m => parseInt(m[1]) * 60 },
-    { re: /(\d+):(\d+)/,                     fn: m => parseInt(m[1]) * 60 + parseInt(m[2]) },
-    { re: /(?:clip|clip musical)/i,           fn: () => 210 },   // 3:30 standard
-    { re: /(?:pub|publicité|spot)\b/i,        fn: () => 30 },    // 30s pub standard
-    { re: /teaser/i,                          fn: () => 60 },    // 60s teaser
-    { re: /court[-\s]métrage/i,              fn: () => 600 },   // 10min court
+    { re: /(\d+)\s*(?:secondes?|sec|s\b)/i,               fn: m => parseInt(m[1]) },
+    { re: /(\d+)\s*(?:minutes?|min|mn)/i,                 fn: m => parseInt(m[1]) * 60 },
+    { re: /(\d{1,2}):(\d{2}):(\d{2})/,                   fn: m => parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]) }, // HH:MM:SS
+    { re: /(\d+):(\d+)/,                                  fn: m => parseInt(m[1]) * 60 + parseInt(m[2]) },
+    { re: /(?:clip|clip musical)/i,                       fn: () => 210 },   // 3:30 standard
+    { re: /(?:pub|publicité|spot)\b/i,                    fn: () => 30 },    // 30s pub standard
+    { re: /teaser/i,                                      fn: () => 60 },    // 60s teaser
+    { re: /court[-\s]métrage/i,                           fn: () => 600 },   // 10min court
   ];
 
   const STYLE_KEYWORDS = {
@@ -109,13 +110,27 @@ Return this exact structure:
   "budgetEstimate": "~$X.XX"
 }
 
-Rules:
-- duration is in seconds
-- bpm: infer from genre (hip-hop: 85-100, trap: 130-145, reggae: 70-90, afro: 100-120, pub: 0 if N/A)
-- shotCount: duration / 15 for clips, duration / 10 for pubs, min 3, max 20
-- hypotheses: ALWAYS list what you inferred that was not explicit in the prompt
-- qaScore: 0-100, based on prompt clarity and completeness
-- budgetEstimate: rough estimate based on shotCount × $0.15 for Kling 3`;
+CRITICAL PARSING RULES — apply these before anything else:
+
+1. DURATION — HH:MM:SS format: If you see "00:01:49", convert to seconds = 0*3600+1*60+49 = 109s. MM:SS format "1:49" = 109s. Always output duration as an integer number of seconds.
+
+2. CHARACTERS — If the brief has a "PERSONNAGES", "PERSONNAGES :", "CHARACTERS" or similar section, extract EVERY named character listed there. Do NOT invent characters or merge them. Use the exact names as written (e.g. "MONSTAAA L'OVNI", "LA FEMME SILENCIEUSE"). Generate a visual description for image generation from the context.
+
+3. LOCATIONS — If the brief has a "LIEUX", "DÉCORS", "LOCATIONS" or similar section, extract EVERY named location listed. Use the exact names. Generate a visual description from context.
+
+4. SCRIPT SECTIONS — If the brief has a "STRUCTURE", "STRUCTURE EXACTE", "DÉCOUPAGE" or similar section with timecodes like "00:00:00 – 00:00:21 — INTRO", parse each line as a scriptSection:
+   - label = the section name after the timecodes
+   - duration = end_seconds - start_seconds (e.g. 00:00:21 – 00:00:44 → duration = 44 - 21 = 23)
+   - content = the visual description provided for that section
+   - type = infer from label (intro/verse/chorus/bridge/outro/sequence)
+
+5. COMPLETENESS — Extract ALL characters, ALL locations, ALL sections from the brief. Never reduce or summarize if explicit lists are given.
+
+6. shotCount = sum of (ceil(sectionDuration/10) * 3) across all sections, min 3, max 30.
+7. bpm: infer from genre (hip-hop: 85-100, trap: 130-145, reggae: 70-90, afro: 100-120, pub: 0 if N/A)
+8. hypotheses: ALWAYS list what you inferred that was not explicit in the prompt
+9. qaScore: 0-100, based on prompt clarity and completeness
+10. budgetEstimate: rough estimate based on shotCount × $1.50 per 10s rush`;
 
     const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -127,7 +142,7 @@ Rules:
       },
       body: JSON.stringify({
         model:      cfg.openrouterModel || 'anthropic/claude-sonnet-4-6',
-        max_tokens: 2048,
+        max_tokens: 4096,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user',   content: `Analyse ce projet et retourne le blueprint JSON :\n\n"${prompt}"` },
@@ -318,6 +333,179 @@ Rules:
     ];
   }
 
+  // ── EXTRACTEUR DE BRIEF STRUCTURÉ ───────────────────────────────────
+  // Analyse le texte brut pour extraire les infos explicitement listées
+  // (PERSONNAGES:, LIEUX:, STRUCTURE:) et les injecte dans le blueprint.
+
+  function _timecodeToSeconds(tc) {
+    const parts = tc.trim().split(':').map(Number);
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return 0;
+  }
+
+  function _extractStructuredBrief(prompt) {
+    const result = {};
+
+    // ── 1. Normaliser le texte (retirer markdown, séparateurs, etc.) ──
+    const clean = prompt
+      .replace(/\*{1,3}([^*\n]+)\*{1,3}/g, '$1')   // **bold** → bold
+      .replace(/_{1,3}([^_\n]+)_{1,3}/g,   '$1')   // __italic__ → italic
+      .replace(/^#{1,6}\s*/gm, '')                  // ## headers
+      .replace(/^[-─=]{3,}$/gm, '')                 // --- séparateurs
+      .replace(/\r\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n');                  // max 2 lignes vides
+
+    // ── 2. Durée totale : chercher RUNTIME/DURÉE explicitement d'abord,
+    //    sinon prendre le plus grand timecode HH:MM:SS trouvé ──
+    const runtimeMatch = clean.match(/(?:RUNTIME|DURÉE?|DURATION|LENGTH)\s*[:\-|]\s*(\d{1,2}):(\d{2}):(\d{2})/i);
+    if (runtimeMatch) {
+      result.duration = parseInt(runtimeMatch[1]) * 3600 + parseInt(runtimeMatch[2]) * 60 + parseInt(runtimeMatch[3]);
+    } else {
+      // Prendre le plus grand timecode (= fin du dernier plan = durée totale)
+      const allTcs = [...clean.matchAll(/\b(\d{1,2}):(\d{2}):(\d{2})\b/g)];
+      if (allTcs.length > 0) {
+        const maxSec = allTcs.reduce((max, m) => {
+          const s = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]);
+          return Math.max(max, s);
+        }, 0);
+        if (maxSec > 5) result.duration = maxSec;
+      }
+    }
+
+    // ── 3. Trouver les positions de chaque section (insensible à la casse) ──
+    const _findPos = (re) => { const m = clean.search(re); return m >= 0 ? m : Infinity; };
+    const posPersonnages = _findPos(/PERSONNAGES?\s*[:\s]/i);
+    const posLieux       = _findPos(/(?:LIEUX?|D[ÉE]CORS?)\s*[:\s]/i);
+    const posStructure   = _findPos(/(?:STRUCTURE(?:\s+EXACTE?)?|D[ÉE]COUPAGE(?:\s+TEMPOREL?)?)\s*[:\s]/i);
+    const posObjets      = _findPos(/OBJETS?\s*[:\s]/i);
+    const posCouleurs    = _findPos(/(?:COULEURS?|PALETTE)\s*[:\s]/i);
+    const posAudio       = _findPos(/(?:AUDIO|MUSIQUE|SON)\s*[:\s]/i);
+    const posNotes       = _findPos(/(?:NOTES?|REMARQUE|CONTRAINTE)\s*[:\s]/i);
+
+    const ALL_SECTIONS = [posPersonnages, posLieux, posStructure, posObjets, posCouleurs, posAudio, posNotes].filter(p => isFinite(p));
+
+    // Extraire le contenu brut d'une section jusqu'à la prochaine section trouvée
+    const _sectionContent = (pos) => {
+      if (!isFinite(pos)) return null;
+      const lineEnd = clean.indexOf('\n', pos);
+      if (lineEnd === -1) return null;
+      const contentStart = lineEnd + 1;
+      const nextSection  = ALL_SECTIONS.filter(p => p > pos).reduce((min, p) => Math.min(min, p), clean.length);
+      return clean.substring(contentStart, nextSection).trim();
+    };
+
+    // ── 4. Personnages ──
+    const persContent = _sectionContent(posPersonnages);
+    if (persContent) {
+      const lines = persContent.split('\n')
+        .map(l => l.replace(/^[-•*▸▶→]\s*/, '').trim())
+        .filter(l => l.length >= 3 && !l.match(/^\s*$/));
+
+      const chars = [];
+      const STOP_WORDS = /^(LES|DES|UNE?|LE|LA|ET|EN|DE|DU|AU|SUR|DANS|AVEC|PAR|POUR|SANS|SOUS|ENTRE|VERS|DEPUIS|PENDANT|RÔLE|ROLE|DESCRIPTION|NOTES?|NB|EX|EG)$/i;
+
+      for (const line of lines) {
+        if (chars.length >= 8) break;
+        // Extraire le nom : tout ce qui est avant ":", "—", "(", ou fin de ligne
+        const sepIdx = line.search(/\s*[:(–—(]/);
+        const rawName = (sepIdx > 0 ? line.substring(0, sepIdx) : line).trim();
+        const name    = rawName.replace(/\s+/g, ' ').toUpperCase();
+        const desc    = sepIdx > 0 ? line.substring(sepIdx + 1).replace(/^[\s:–—(]+/, '').trim() : '';
+
+        // Filtres qualité
+        if (name.length < 2)          continue;
+        if (STOP_WORDS.test(name))    continue;
+        if (name.split(' ').length > 5) continue; // trop de mots = description, pas un nom
+        if (/^\d/.test(name))         continue;   // commence par chiffre
+
+        chars.push({
+          name,
+          description: desc || `${name}, style cinématique sombre et urbain`,
+          role: chars.length === 0 ? 'protagonist' : 'featured',
+        });
+      }
+      if (chars.length > 0) result.characters = chars;
+    }
+
+    // ── 5. Lieux ──
+    const lieuxContent = _sectionContent(posLieux);
+    if (lieuxContent) {
+      const lines = lieuxContent.split('\n')
+        .map(l => l.replace(/^[-•*▸▶→]\s*/, '').trim())
+        .filter(l => l.length >= 3);
+
+      const locs = [];
+      for (const line of lines) {
+        if (locs.length >= 8) break;
+        const sepIdx = line.search(/\s*[:(–—]/);
+        const rawName = (sepIdx > 0 ? line.substring(0, sepIdx) : line).trim();
+        if (rawName.length < 3) continue;
+
+        const desc = sepIdx > 0 ? line.substring(sepIdx + 1).replace(/^[\s:–—]+/, '').trim() : '';
+        const ll   = line.toLowerCase();
+        const mood = (ll.includes('nuit') || ll.includes('nocturne') || ll.includes('sombre'))
+          ? 'nuit, éclairage artificiel bas, ambiance sombre'
+          : ll.includes('jour') ? 'journée, lumière naturelle'
+          : 'nuit ou ambiance contrôlée';
+
+        const name = rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
+        locs.push({
+          name,
+          description: desc || `${name}, style urbain cinématique, éclairage dramatique`,
+          mood,
+        });
+      }
+      if (locs.length > 0) result.locations = locs;
+    }
+
+    // ── 6. Sections avec timecodes ──
+    const structContent = _sectionContent(posStructure);
+    if (structContent) {
+      const lines = structContent.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+      const sections = [];
+
+      for (const line of lines) {
+        // "00:00:00 – 00:00:21 — INTRO : rappeur entre dans le cadre"
+        // "00:00:21–00:00:44 — COUPLET 1 – description"
+        const tcLine = line.match(/(\d{1,2}:\d{2}:\d{2})\s*[–—\-]+\s*(\d{1,2}:\d{2}:\d{2})\s*[–—:—]\s*(.+)/);
+        if (!tcLine) continue;
+
+        const startSec = _timecodeToSeconds(tcLine[1]);
+        const endSec   = _timecodeToSeconds(tcLine[2]);
+        const dur      = Math.max(1, endSec - startSec);
+        const rest     = tcLine[3].trim();
+
+        // Séparer label (avant ":" ou "—") et contenu
+        const split    = rest.match(/^([^:–—]{2,40}?)\s*[–—:]\s*(.+)$/);
+        const label    = (split ? split[1] : rest).trim();
+        const content  = split ? split[2].trim() : rest;
+
+        const ll  = label.toLowerCase();
+        const type = ll.includes('intro')   ? 'intro'  :
+                     ll.includes('outro')   ? 'outro'  :
+                     ll.includes('refrain') ? 'chorus' :
+                     ll.includes('chorus')  ? 'chorus' :
+                     ll.includes('hook')    ? 'chorus' :
+                     ll.includes('bridge')  ? 'bridge' :
+                     ll.includes('couplet') ? 'verse'  :
+                     ll.includes('verse')   ? 'verse'  : 'sequence';
+
+        sections.push({ type, label, duration: dur, content });
+      }
+      if (sections.length > 0) result.scriptSections = sections;
+    }
+
+    console.log('[AutoBuild] _extractStructuredBrief →', {
+      duration:       result.duration,
+      characters:     result.characters?.length,
+      locations:      result.locations?.length,
+      scriptSections: result.scriptSections?.length,
+    });
+
+    return result;
+  }
+
   // ── POINT D'ENTRÉE PRINCIPAL ─────────────────────────────────────────
 
   async function parse(prompt) {
@@ -326,21 +514,40 @@ Rules:
     // Extraire contacts depuis le prompt brut (indépendant de Claude)
     const contacts = _extractContacts(prompt);
 
+    // Extraire les données structurées explicites du brief (priorité maximale)
+    const structured = _extractStructuredBrief(prompt);
+    console.log('[AutoBuild] structured extract:', structured);
+
     // Essayer Claude en premier
+    let blueprint = null;
     try {
-      const claudeResult = await _parseWithClaude(prompt);
-      if (claudeResult) {
-        claudeResult.contacts = { ...contacts, ...claudeResult.contacts };
-        return claudeResult;
-      }
+      blueprint = await _parseWithClaude(prompt);
     } catch (e) {
       console.warn('AutoBuild: Claude indisponible, fallback interne :', e.message);
     }
 
-    // Fallback interne toujours disponible
-    const bp = _fallbackParse(prompt);
-    bp.contacts = contacts;
-    return bp;
+    if (!blueprint) {
+      blueprint = _fallbackParse(prompt);
+    }
+
+    // ── Merge : les données structurées extraites directement overrident Claude ──
+    if (structured.duration   && structured.duration > 0)  blueprint.duration       = structured.duration;
+    if (structured.characters && structured.characters.length > 0) blueprint.characters    = structured.characters;
+    if (structured.locations  && structured.locations.length  > 0) blueprint.locations     = structured.locations;
+    if (structured.scriptSections && structured.scriptSections.length > 0) blueprint.scriptSections = structured.scriptSections;
+
+    blueprint.contacts = { ...contacts, ...(blueprint.contacts || {}) };
+
+    // Recalculer shotCount après merge
+    if (blueprint.scriptSections?.length > 0) {
+      const totalShots = blueprint.scriptSections.reduce((sum, s) => {
+        const rushCount = Math.ceil((s.duration || 10) / 10);
+        return sum + rushCount * 3;
+      }, 0);
+      blueprint.shotCount = Math.max(3, Math.min(30, totalShots));
+    }
+
+    return blueprint;
   }
 
   // ── APPLICATION DU BLUEPRINT AU PROJET ──────────────────────────────

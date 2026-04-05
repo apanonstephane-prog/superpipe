@@ -4,6 +4,10 @@
 
 const ModuleProject = {
 
+  // Photo CRef uploadée avant l'Auto Build (sera assignée au protagoniste)
+  _pendingCRefBase64: null,
+  _pendingCRefPreview: null,
+
   render() {
     const p = State.currentProject();
     if (!p) {
@@ -51,6 +55,24 @@ const ModuleProject = {
             <button class="pill pill-accent" style="cursor:pointer;font-size:9px;white-space:nowrap"
                     onclick="document.getElementById('autobuild-prompt').value=${JSON.stringify(ex)}">${label}</button>
           `).join('')}
+        </div>
+
+        <!-- Upload photo CRef du protagoniste avant Auto Build -->
+        <div style="background:var(--bg-0);border:1px solid var(--accent-border);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+          <div style="font-family:var(--font-mono);font-size:9px;color:var(--accent);letter-spacing:1px;margin-bottom:6px">📸 PHOTO DE RÉFÉRENCE (optionnel — protagoniste principal)</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div id="ab-cref-thumb" style="width:44px;height:44px;border-radius:6px;overflow:hidden;background:var(--bg-2);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">
+              ${ModuleProject._pendingCRefPreview ? `<img src="${ModuleProject._pendingCRefPreview}" style="width:100%;height:100%;object-fit:cover">` : '👤'}
+            </div>
+            <div style="flex:1">
+              <label style="cursor:pointer;display:inline-block;font-size:10px;padding:5px 12px;background:var(--bg-2);border:1px solid var(--border);border-radius:6px;color:var(--text-2)">
+                ${ModuleProject._pendingCRefBase64 ? '✅ Photo uploadée — cliquer pour changer' : 'Uploader ta photo / photo du protagoniste'}
+                <input type="file" accept="image/*" style="display:none" onchange="ModuleProject.setPendingCRef(this.files[0])">
+              </label>
+              ${ModuleProject._pendingCRefBase64 ? `<button style="margin-left:6px;font-size:9px;padding:4px 8px;background:transparent;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--text-3)" onclick="ModuleProject._pendingCRefBase64=null;ModuleProject._pendingCRefPreview=null;ModuleProject.render()">✕ Retirer</button>` : ''}
+              <div style="font-size:9px;color:var(--text-3);margin-top:4px">Sera automatiquement verrouillée comme CRef du protagoniste</div>
+            </div>
+          </div>
         </div>
 
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -285,6 +307,24 @@ const ModuleProject = {
       if (progSt)  progSt.textContent  = 'Blueprint appliqué ✓';
 
       AutoBuildEngine.apply(blueprint);
+
+      // ── Injecter la photo CRef pré-uploadée sur le protagoniste ──
+      if (ModuleProject._pendingCRefBase64) {
+        const allChars = State.currentProject()?.characters || [];
+        const protagonist = allChars.find(c => c.role === 'protagonist') || allChars[0];
+        if (protagonist) {
+          State.updateCharacter(protagonist.id, {
+            base64:        ModuleProject._pendingCRefBase64,
+            generatedBase: ModuleProject._pendingCRefBase64,
+            locked:        true,
+          });
+          Toast.info(`📸 Photo assignée à "${protagonist.name}" et verrouillée`);
+        }
+        // Réinitialiser après injection
+        ModuleProject._pendingCRefBase64  = null;
+        ModuleProject._pendingCRefPreview = null;
+      }
+
       this.render();
       App.updateBadges();
       App.updateSidebarStats();
@@ -600,6 +640,19 @@ Prompt original : "${prompt}"`,
   },
 
   // ── Génération auto des assets depuis le blueprint ───────────────────
+
+  // Pré-charger la photo CRef du protagoniste avant Auto Build
+  async setPendingCRef(file) {
+    if (!file) return;
+    try {
+      const base64 = await Downloader.fileToBase64(file);
+      ModuleProject._pendingCRefBase64    = base64;
+      ModuleProject._pendingCRefPreview   = base64;
+      this.render();
+    } catch (e) {
+      Toast.error('Erreur lecture photo : ' + e.message);
+    }
+  },
 
   // Upload photo CRef directement depuis le blueprint
   async uploadCharRefPhoto(charId, file) {
