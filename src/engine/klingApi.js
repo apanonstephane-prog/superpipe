@@ -128,23 +128,34 @@ const KlingAPI = (() => {
     const key = getKey();
     const { referenceImages } = buildReferenceImages(project);
 
-    // ── DURÉE FIXE 10s ──────────────────────────────────────────────────
-    // Chaque rush = 1 seul shot de 10s. Payload simplifié, zéro multishot.
-    // L'utilisateur calibre au montage Shotstack.
-    const FIXED_DURATION = 10;
-    const firstShot = multishot.shots?.[0];
-    if (!firstShot) throw new Error('Aucun shot défini');
+    // ── RUSH = 10s FIXE, plusieurs shots dedans ─────────────────────────
+    // Chaque rush = 10s total. Les shots sont répartis uniformément.
+    // Ex: 3 shots → chacun dure ~3s (arrondi pour que la somme = 10s exactement)
+    const RUSH_DURATION = 10;
+    const rawShots = (multishot.shots || []).slice(0, 6);
+    if (rawShots.length === 0) throw new Error('Aucun shot défini');
 
-    const prompt = (firstShot.prompt || '').substring(0, 512);
+    // Répartir 10s uniformément entre les shots
+    const shotDur = Math.floor(RUSH_DURATION / rawShots.length);
+    const remainder = RUSH_DURATION - shotDur * rawShots.length;
+    const shots = rawShots.map((s, i) => ({
+      prompt:   (s.prompt || '').substring(0, 512),
+      duration: shotDur + (i === 0 ? remainder : 0), // les secondes restantes sur le 1er
+    }));
+
+    // Vérification : la somme doit être exactement RUSH_DURATION
+    const totalDuration = shots.reduce((sum, s) => sum + s.duration, 0);
 
     // mode : l'API Replicate attend "standard" ou "pro"
     const modeRaw = multishot.mode || 'standard';
     const mode    = modeRaw === 'std' ? 'standard' : modeRaw;
 
     const input = {
-      prompt,
-      duration:        FIXED_DURATION,
-      negative_prompt: multishot.negativePrompt || firstShot.negativePrompt || 'blurry, low quality, watermark, text overlay, distorted, overexposed, amateur, static shot, shaky',
+      prompt:          shots[0].prompt,
+      multi_prompt:    JSON.stringify(shots),
+      multi_shot_type: 'customize',
+      duration:        totalDuration,
+      negative_prompt: multishot.negativePrompt || rawShots[0]?.negativePrompt || 'blurry, low quality, watermark, text overlay, distorted, overexposed, amateur, static shot, shaky',
       cfg_scale:       0.5,
       mode,
       aspect_ratio:    multishot.aspectRatio || '16:9',

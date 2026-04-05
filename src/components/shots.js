@@ -595,14 +595,19 @@ const ModuleShots = {
   // ─────────────────────────────────────────────────────────────────
 
   _packShotsIntoRushes(shots, sectionIndex, sectionLabel, sectionType, project) {
-    // 1 shot = 1 rush de 10s fixe — calibrage au montage Shotstack
+    // Rush = 10s fixe, max 6 shots par rush
+    // Les shots sont groupés, klingApi répartit la durée uniformément
+    const SHOTS_PER_RUSH = 3; // 3 shots × ~3s = 10s — bon équilibre
     const mode   = project._klingMode || 'standard';
     const aspect = project._klingAspect || '16:9';
     const existingCount = (project.rushes || []).filter(r => r.sectionIndex === sectionIndex).length;
 
-    return shots.map((shot, i) =>
-      this._makeRushItem([shot], sectionIndex, sectionLabel, sectionType, existingCount + i, mode, aspect)
-    );
+    const rushes = [];
+    for (let i = 0; i < shots.length; i += SHOTS_PER_RUSH) {
+      const group = shots.slice(i, i + SHOTS_PER_RUSH);
+      rushes.push(this._makeRushItem(group, sectionIndex, sectionLabel, sectionType, existingCount + rushes.length, mode, aspect));
+    }
+    return rushes;
   },
 
   _makeRushItem(shots, sectionIndex, sectionLabel, sectionType, num, mode, aspect) {
