@@ -373,15 +373,31 @@ CRITICAL PARSING RULES — apply these before anything else:
       }
     }
 
-    // ── 3. Trouver les positions de chaque section (insensible à la casse) ──
-    const _findPos = (re) => { const m = clean.search(re); return m >= 0 ? m : Infinity; };
-    const posPersonnages = _findPos(/PERSONNAGES?\s*[:\s]/i);
-    const posLieux       = _findPos(/(?:LIEUX?|D[ÉE]CORS?)\s*[:\s]/i);
-    const posStructure   = _findPos(/(?:STRUCTURE(?:\s+EXACTE?)?|D[ÉE]COUPAGE(?:\s+TEMPOREL?)?)\s*[:\s]/i);
-    const posObjets      = _findPos(/OBJETS?\s*[:\s]/i);
-    const posCouleurs    = _findPos(/(?:COULEURS?|PALETTE)\s*[:\s]/i);
-    const posAudio       = _findPos(/(?:AUDIO|MUSIQUE|SON)\s*[:\s]/i);
-    const posNotes       = _findPos(/(?:NOTES?|REMARQUE|CONTRAINTE)\s*[:\s]/i);
+    // ── 3. Trouver les positions des HEADERS de section ──
+    // IMPORTANT : chercher uniquement en début de ligne (pas dans le corps du texte)
+    // Ex: "des personnages mystérieux" ne doit PAS matcher le header PERSONNAGES
+    const _findLinePos = (keyword) => {
+      const lines = clean.split('\n');
+      let pos = 0;
+      for (const line of lines) {
+        const trimmed = line.trim();
+        // Header valide : correspond au keyword, ligne courte (pas une phrase)
+        if (keyword.test(trimmed) && trimmed.length < 80) {
+          return pos;
+        }
+        pos += line.length + 1;
+      }
+      return Infinity;
+    };
+    // Les patterns matchent UNIQUEMENT quand le keyword est en début de ligne
+    // [\s:$] = suivi d'espace, colon, ou fin de ligne → "PERSONNAGES" seul = header aussi
+    const posPersonnages = _findLinePos(/^PERSONNAGES?(?:[\s:]|$)/i);
+    const posLieux       = _findLinePos(/^(?:LIEUX?|D[ÉE]CORS?)(?:[\s:]|$)/i);
+    const posStructure   = _findLinePos(/^(?:STRUCTURE|D[ÉE]COUPAGE)(?:[\s:]|$)/i);
+    const posObjets      = _findLinePos(/^OBJETS?(?:[\s:]|$)/i);
+    const posCouleurs    = _findLinePos(/^(?:COULEURS?|PALETTE|CHARTE)(?:[\s:]|$)/i);
+    const posAudio       = _findLinePos(/^(?:AUDIO|MUSIQUE|SON|BANDE)(?:[\s:]|$)/i);
+    const posNotes       = _findLinePos(/^(?:NOTES?|REMARQUES?|CONTRAINTES?|INFOS?)(?:[\s:]|$)/i);
 
     const ALL_SECTIONS = [posPersonnages, posLieux, posStructure, posObjets, posCouleurs, posAudio, posNotes].filter(p => isFinite(p));
 

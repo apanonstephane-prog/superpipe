@@ -95,14 +95,15 @@ const ModuleShots = {
     const hasClaude  = ClaudeAPI.isConfigured();
     const hasKling   = KlingAPI.isConfigured();
     const hasRushes  = (p.rushes || []).length > 0;
-    const allReady   = hasScript && hasRefs;
+    // Seul le script est obligatoire — les refs sont optionnelles (enrichissent les prompts si présentes)
+    const allReady   = hasScript;
 
-    // Checklist de statut — seuls Script + Refs sont obligatoires
+    // Checklist de statut
     const checks = [
       { ok: hasScript, required: true,  label: 'Script parsé',          count: `${sections.length} section${sections.length !== 1 ? 's' : ''}`,   action: `App.goTo('script')`,   actionLabel: '→ Script' },
-      { ok: hasRefs,   required: true,  label: 'Références verrouillées', count: `${tags.chars.length} perso · ${tags.locs.length} lieu · ${tags.objs.length} objet`, action: `App.goTo('cref')`, actionLabel: '→ Persos' },
-      { ok: hasKling,  required: false, label: 'Replicate API',          count: hasKling  ? 'Configurée' : 'MOCK mode (test sans coût)',            action: `App.goTo('settings')`, actionLabel: '→ Config' },
-      { ok: hasClaude, required: false, label: 'Claude API (optionnel)', count: hasClaude ? 'Configurée — prompts enrichis' : 'Non configurée — moteur interne utilisé', action: `App.goTo('settings')`, actionLabel: '→ Config' },
+      { ok: hasRefs,   required: false, label: 'Références visuelles',  count: hasRefs ? `${tags.chars.length} perso · ${tags.locs.length} lieu · ${tags.objs.length} objet` : 'Optionnel — améliore les prompts', action: `App.goTo('cref')`, actionLabel: '→ Persos' },
+      { ok: hasKling,  required: false, label: 'Replicate API',         count: hasKling  ? 'Configurée' : 'MOCK mode (test sans coût)',            action: `App.goTo('settings')`, actionLabel: '→ Config' },
+      { ok: hasClaude, required: false, label: 'OpenRouter (optionnel)',count: hasClaude ? 'Configurée — prompts enrichis' : 'Non configurée — moteur interne utilisé', action: `App.goTo('settings')`, actionLabel: '→ Config' },
     ];
 
     return `
@@ -266,12 +267,15 @@ const ModuleShots = {
     // Titrages : plans autonomes, pas des références visuelles injectées ici
 
     if (thumbs.length === 0) return `
-      <div class="alert-box alert-warn" style="margin-bottom:16px">
-        ⚠ Aucune référence verrouillée — verrouillez des personnages, lieux, objets ou titrages pour les injecter dans les prompts Kling 3.
-        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm" onclick="App.goTo('cref')">→ Personnages</button>
-          <button class="btn btn-ghost btn-sm" onclick="App.goTo('lref')">→ Lieux</button>
-          <button class="btn btn-ghost btn-sm" onclick="App.goTo('objects')">→ Objets</button>
+      <div style="background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:18px">🔘</span>
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--text-2)">Aucune référence visuelle — la génération fonctionnera sans images de référence.</div>
+          <div style="font-size:10px;color:var(--text-3);margin-top:2px">Optionnel : verrouillez personnages / lieux / objets pour des résultats plus cohérents.</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn btn-ghost btn-sm" style="font-size:9px" onclick="App.goTo('cref')">Personnages</button>
+          <button class="btn btn-ghost btn-sm" style="font-size:9px" onclick="App.goTo('lref')">Lieux</button>
         </div>
       </div>`;
 
@@ -598,8 +602,8 @@ const ModuleShots = {
     // Rush = 10s fixe, max 6 shots par rush
     // Les shots sont groupés, klingApi répartit la durée uniformément
     const SHOTS_PER_RUSH = 3; // 3 shots × ~3s = 10s — bon équilibre
-    const mode   = project._klingMode || 'standard';
-    const aspect = project._klingAspect || '16:9';
+    const mode   = 'standard'; // Kling 3 = toujours standard (pro = qualité+)
+    const aspect = project.aspectRatio || '16:9'; // vient bien du projet
     const existingCount = (project.rushes || []).filter(r => r.sectionIndex === sectionIndex).length;
 
     const rushes = [];
